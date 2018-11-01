@@ -6,6 +6,7 @@ TcpServerWorker::TcpServerWorker(QObject *parent) :
     mClientType = TcpServerWorker::ClientType::UNKNOW;
     mClientID = "";
     mSocket = NULL;
+    mLastMsg = "";
 }
 
 TcpServerWorker::~TcpServerWorker()

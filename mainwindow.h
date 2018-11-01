@@ -7,6 +7,7 @@
 #include <tcpserverworker.h>
 #include <QMutex>
 #include <QSettings>
+#include <datastorer.h>
 
 namespace Ui {
 class MainWindow;
@@ -23,6 +24,7 @@ public:
     log(QString str);
     clearLog();
     stop_server_listen();
+    bool saveMsgToFile(QString file, QString msg);
 public slots:
     slot_worker_socket_abort(TcpServerWorker *worker);
     slot_worker_data_received(TcpServerWorker *worker, QByteArray buffer);
@@ -37,10 +39,13 @@ private:
     QMutex mPCDataMute;
     QMutex mPADDataMute;
     QSettings mSetting;
+    DataStorer mDataStorer;
+    QString mPCMsgBackupfile ;
+    QString mPADMsgBackupfile;
     bool start_server_listen();
     server_setup_worker_id_type(TcpServerWorker *worker, QByteArray buffer);
-    bool pc_tester_data_check_and_store(QString id, QByteArray data);
-    bool pad_tester_data_check_and_store(QString id, QByteArray data);
+    bool pc_tester_data_check_and_store(TcpServerWorker *worker,QString id, QByteArray data);
+    bool pad_tester_data_check_and_store(TcpServerWorker *worker,QString id, QByteArray data);
 };
 
 #endif // MAINWINDOW_H

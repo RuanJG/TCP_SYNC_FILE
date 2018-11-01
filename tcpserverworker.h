@@ -15,6 +15,7 @@ public:
     QString mClientID;
     int mClientType;
     QTcpSocket *mSocket;
+    QString mLastMsg;
     enum ClientType {
         UNKNOW = 1,
         PCTESTER = 2,
@@ -25,7 +26,9 @@ public:
         ERROR_ID ,
         ERROR_TYPE ,
         ERROR_SETUP_ID_TYPE,
-        ERROR_DATA
+        ERROR_DATA,
+        ERROR_REPEAT_BARCODE,
+        ERROR_FILE
     };
     sendAck(enum ACKType res);
     log(QString str);
