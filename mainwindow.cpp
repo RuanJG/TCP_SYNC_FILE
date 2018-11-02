@@ -4,13 +4,17 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QKeyEvent>
+#include <QDate>
+#include <QDateTime>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
     mSocket(NULL),
     mPackgetReplied(false),
-    mSetting(qApp->applicationDirPath()+"\/clientSetting.ini",QSettings::IniFormat)
+    mSetting(qApp->applicationDirPath()+"\/clientSetting.ini",QSettings::IniFormat),
+    mOneDataFile(false),
+    mLastMsg()
 {
     ui->setupUi(this);
     ui->ConnectButton->setText(tr("连接服务器"));
@@ -27,14 +31,32 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->idLineEdit->setText(mSetting.value("net/id").toString());
     on_ConnectButton_clicked();
 
-    if( mSetting.contains("data/savefile")){
-        //QString file = mSetting.value("data/savefile").toString();
-        ui->saveDataFilelineEdit->setText(mSetting.value("data/savefile").toString());
+    if( mOneDataFile )
+    {
+        if( mSetting.contains("data/savefile")){
+            //QString file = mSetting.value("data/savefile").toString();
+            ui->saveDataFilelineEdit->setText(mSetting.value("data/savefile").toString());
+        }else{
+            //QString file2 = mSetting.value("data/savefile").toString();
+            QString file = qApp->applicationDirPath()+"\/SBSdata.txt";
+            ui->saveDataFilelineEdit->setText(file);
+        }
     }else{
-        //QString file2 = mSetting.value("data/savefile").toString();
-        QString file = qApp->applicationDirPath()+"\/SBSdata.txt";
+        QDate date = QDate::currentDate();
+        QString file = qApp->applicationDirPath()+"\/SBSdata_"+date.toString("yyyyMMdd")+".txt";
         ui->saveDataFilelineEdit->setText(file);
+        ui->saveDataFilelineEdit->setReadOnly(true);
     }
+
+    ui->barcodelineEdit->setValidator(new QRegExpValidator(QRegExp("[A-F0-9]{16}"),this));
+    ui->leftlineEdit->setValidator(new QRegExpValidator(QRegExp("[.0-9]{4}"),this));
+    ui->rightlineEdit->setValidator(new QRegExpValidator(QRegExp("[.0-9]{4}"),this));
+    connect(ui->barcodelineEdit,SIGNAL(returnPressed()),this, SLOT(slot_barcodeEdit_get_Return_KEY()));
+    connect(ui->leftlineEdit,SIGNAL(returnPressed()),this, SLOT(slot_leftedit_get_Return_KEY()));
+    connect(ui->rightlineEdit,SIGNAL(returnPressed()),this, SLOT(slot_rightedit_get_Return_KEY()));
+
+    ui->datatextBrowser->append(tr("时间----------  序列号---------- 左间隙-右间隙"));
+
 }
 
 MainWindow::~MainWindow()
@@ -51,6 +73,7 @@ MainWindow::clearLog()
 {
     ui->console->clear();
 }
+
 
 MainWindow::disableNetworkSetting(bool disable)
 {
@@ -104,7 +127,21 @@ MainWindow::updateDataInputState()
         ui->leftlineEdit->setEnabled(false);
         ui->rightlineEdit->setEnabled(false);
         ui->stateLabel->setText(tr("发送数据..."));
-        sendDataMessage();
+        int res = QMessageBox::warning(this,tr("发送数据"),
+                             QString("序列号 "+ui->barcodelineEdit->text()+"\n左间隙 "+ui->leftlineEdit->text()+"\n右间隙 "+ui->rightlineEdit->text()),
+                             QMessageBox::Yes,QMessageBox::No);
+
+        if( res == QMessageBox::Yes ){
+            sendDataMessage();
+        }else{
+            mInputIndex =4;
+            ui->barcodelineEdit->setEnabled(true);
+            ui->barcodelineEdit->setFocus();
+            ui->leftlineEdit->setEnabled(false);
+            ui->rightlineEdit->setEnabled(false);
+            ui->stateLabel->setText(tr("输入序列号,按Enter结束"));
+        }
+
         break;
 
     }
@@ -205,65 +242,98 @@ MainWindow::disconnectServer()
     }
 }
 
+bool MainWindow::saveMsgToFile(QString msg)
+{
+    QFile savefile(ui->saveDataFilelineEdit->text());
+    if( !savefile.open(QFile::Append|QFile::Text)){
+        QMessageBox::warning(this,tr("错误"), tr("打开数据文件失败"));
+        return false;
+    }
+    //savefile.seek(savefile.size());
+    savefile.write(msg.toLocal8Bit());
+    savefile.flush();
+
+    ui->datatextBrowser->append(msg);
+
+    savefile.close();
+    return true;
+}
+
 void MainWindow::syncLoop(QByteArray data)
 {
     if( mSocket == NULL ) return;
 
+    int res ;
+    QString idpack,typePack;
+
+
 
     if( data.length() == 4 && data.left(3) == "ACK" )
     {
-        if( data == "ACK0"){
-            mPackgetReplied = true;
-            if( mStep == 1 ){
+        mPackgetReplied = true;
+        res = QString(data.right(1)).toInt();
+        //QMessageBox::warning(this,QString(data),"ack="+QString::number(res));
+        switch (res)
+        {
+        case MainWindow::ACKType::OK:
+            switch( mStep )
+            {
+            case 0:
+                //send type
+                log("send type...");
+                ui->stateLabel->setText(tr("认证 TYPE..."));
+                typePack = "TYPE"+QString::number(ClientType::PCTESTER);
+                mSocket->write(typePack.toLocal8Bit());
+                mStep++;
+                break;
+            case 1:
                 ui->stateLabel->setStyleSheet("color:blue;");
                 ui->stateLabel->setText(tr("已登录服务器"));
+                mStep++;
+                break;
+            case 2:
+                ui->stateLabel->setText(tr("发送数据成功"));
+                saveMsgToFile(mLastMsg);
+                disableDataInputState();
+                updateDataInputState();
+                break;
+            default:
+                QMessageBox::warning(this,tr("错误"), tr("到达未知步骤"),NULL,NULL);
+                break;
             }
-            mStep = mStep < 2 ? (mStep+1):(mStep) ;
-        }else{
-            QMessageBox::warning(this,tr("通讯错误"), tr("错误:"+data),NULL,NULL);
-            return;
+            break;
+        case MainWindow::ACKType::ERROR_DATA:
+            QMessageBox::warning(this,tr("通讯错误"), tr("数据包错误"),NULL,NULL);
+            break;
+        case MainWindow::ACKType::ERROR_FILE:
+            QMessageBox::warning(this,tr("服务器错误"), tr("文件读写出错"),NULL,NULL);
+            break;
+        case MainWindow::ACKType::ERROR_REPEAT_BARCODE:
+            if( QMessageBox::Yes == QMessageBox::warning(this,tr("数据错误"), tr("产品序列号有重复，是否要覆盖旧数据？"),QMessageBox::Yes,QMessageBox::No))
+            {
+                //send the last msg again , mean that to replace the old record in the server.
+                mSocket->write(mLastMsg.toLocal8Bit());
+            }else{
+                disableDataInputState();
+                updateDataInputState();
+            }
+            break;
         }
+
     }else{
         if( data.length() != 0 ){
             QMessageBox::warning(this,tr("通讯错误"), tr("未知数据:"+data),NULL,NULL);
             return;
         }
-    }
-
-
-
-    QString idpack,typePack;
-    switch( mStep )
-    {
-    case 0:
-        //send ID
-        log("send id...");
-        ui->stateLabel->setText(tr("认证 ID..."));
-        idpack = "ID"+ui->idLineEdit->text();
-        mSocket->write(idpack.toLocal8Bit());
-        break;
-    case 1:
-        //send type
-        log("send type...");
-        ui->stateLabel->setText(tr("认证 TYPE..."));
-        typePack = "TYPE"+QString::number(ClientType::PCTESTER);
-        mSocket->write(typePack.toLocal8Bit());
-        break;
-    case 2:
-        if( mInputIndex == 3){
-            if( mPackgetReplied ){
-                ui->stateLabel->setText(tr("发送数据成功"));
-                disableDataInputState();
-                updateDataInputState();
-            }else{
-                sendDataMessage();
-            }
+        //start login
+        if( mStep == 0){
+            log("send id...");
+            ui->stateLabel->setText(tr("认证 ID..."));
+            idpack = "ID"+ui->idLineEdit->text();
+            mSocket->write(idpack.toLocal8Bit());
         }
-        break;
-    default:
-        QMessageBox::warning(this,tr("错误"), tr("到达未知步骤"),NULL,NULL);
-        break;
     }
+
 }
 
 
@@ -302,42 +372,64 @@ void MainWindow::on_sendButton_clicked()
 
 void MainWindow::sendDataMessage()
 {
-    QString msg = ui->barcodelineEdit->text()+" "+ui->leftlineEdit->text()+" "+ui->rightlineEdit->text()+"\n";
+    QDateTime date = QDateTime::currentDateTime();
+    //QString date = QDate::toString("YYMMDDHHMMSS");
+    QString msg = date.toString("yyyyMMddhhmmss")+" "+ui->barcodelineEdit->text()+" "+ui->leftlineEdit->text()+" "+ui->rightlineEdit->text()+"\n";
 
-    QFile savefile(ui->saveDataFilelineEdit->text());
-    if( !savefile.open(QFile::Append|QFile::Text)){
-        QMessageBox::warning(this,tr("错误"), tr("打开数据文件失败"));
-        return;
-    }
-    //savefile.seek(savefile.size());
-    savefile.write(msg.toLocal8Bit());
-    savefile.flush();
+    mLastMsg = msg;
 
     if(mSocket->state() == QAbstractSocket::ConnectedState){
-        if( mStep == 2 && mPackgetReplied ){
+        //if( mStep == 2 && mPackgetReplied ){
             log("send data...");
-            mPackgetReplied = false;
+        //    mPackgetReplied = false;
             mSocket->write(msg.toLocal8Bit());
-        }else{
-            QMessageBox::warning(this,tr("错误"), tr("上次信息还没收到ACK"),NULL,NULL);
-        }
+        //}else{
+        //    QMessageBox::warning(this,tr("错误"), tr("上次信息还没收到ACK"),NULL,NULL);
+        //}
     }else{
         QMessageBox::warning(this,tr("错误"), tr("发送数据失败，未连接网络"),NULL,NULL);
     }
 }
 
 
-void MainWindow::keyReleaseEvent(QKeyEvent *ev)
+void MainWindow::slot_barcodeEdit_get_Return_KEY()
 {
-
-    if( ui->tabWidget->currentWidget()->objectName() == "tab_collector"){
-        if( ev->key() == Qt::Key_Return){
-            //log("get key="+QString::number(ev->key()));
-           updateDataInputState();
-        }
+    if( ui->barcodelineEdit->text().length() != 16){
+        QMessageBox::warning(this,tr("错误"),tr("序列号长度不等于16位，请重新输入"));
+        ui->barcodelineEdit->clear();
+    }else{
+        updateDataInputState();
     }
-
 }
+void MainWindow::slot_leftedit_get_Return_KEY()
+{
+    bool inttostring =false;
+    float value = 0.0;
+
+    value = ui->leftlineEdit->text().toFloat(&inttostring);
+    if( !inttostring || value<= 0.44 ||value>= 0.56 ){
+        QMessageBox::warning(this,tr("错误"),tr("数据不在[0.45~0.55]范围内，产品不良！"),NULL,NULL);
+        disableDataInputState();
+        updateDataInputState();
+    }else{
+        updateDataInputState();
+    }
+}
+void MainWindow::slot_rightedit_get_Return_KEY()
+{
+    bool inttostring =false;
+    float value = 0.0;
+
+    value = ui->rightlineEdit->text().toFloat(&inttostring);
+    if( !inttostring || value<= 0.44 ||value>= 0.56 ){
+        QMessageBox::warning(this,tr("错误"),tr("数据不在[0.45~0.55]范围内，产品不良！"));
+        disableDataInputState();
+        updateDataInputState();
+    }else{
+        updateDataInputState();
+    }
+}
+
 
 
 void MainWindow::on_resetInputpushButton_clicked()
@@ -365,14 +457,6 @@ void MainWindow::on_reWritepushButton_clicked()
     }
 }
 
-void MainWindow::on_saveSettingpushButton_clicked()
-{
-    mSetting.setValue("net/port", ui->portLineEdit->text());
-    mSetting.setValue("net/ip",ui->ipLineEdit->text());
-    mSetting.setValue("net/id", ui->idLineEdit->text());
-    mSetting.sync();
-    //QMessageBox::warning(this,tr("提示"),tr("保存成功"));
-}
 
 void MainWindow::on_idLineEdit_textChanged(const QString &arg1)
 {

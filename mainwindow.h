@@ -5,6 +5,7 @@
 #include <QTcpSocket>
 #include <QSettings>
 #include <QFile>
+#include <QStringListModel>
 
 namespace Ui {
 class MainWindow;
@@ -32,13 +33,19 @@ public:
         ERROR_ID ,
         ERROR_TYPE ,
         ERROR_SETUP_ID_TYPE,
-        ERROR_DATA
+        ERROR_DATA,
+        ERROR_REPEAT_BARCODE,
+        ERROR_FILE
     };
+    bool saveMsgToFile(QString msg);
 public slots:
     socket_Disconnected();
     socket_Connected();
     socket_state(QAbstractSocket::SocketState socketState);
     socket_Read_Data();
+    void slot_barcodeEdit_get_Return_KEY();
+    void slot_leftedit_get_Return_KEY();
+    void slot_rightedit_get_Return_KEY();
 private slots:
     void on_ConnectButton_clicked();
 
@@ -47,8 +54,6 @@ private slots:
     void on_resetInputpushButton_clicked();
 
     void on_reWritepushButton_clicked();
-
-    void on_saveSettingpushButton_clicked();
 
     void on_idLineEdit_textChanged(const QString &arg1);
 
@@ -69,13 +74,16 @@ private:
     int mInputIndex;
     QSettings mSetting;
     QFile dataFile;
+    bool mOneDataFile;
+    QString mLastMsg;
+
 
     disableNetworkSetting(bool disable);
     updateDataInputState();
     disableDataInputState();
     void sendDataMessage();
 protected:
-    virtual void keyReleaseEvent(QKeyEvent *ev);
+    //virtual void keyReleaseEvent(QKeyEvent *ev);
 };
 
 #endif // MAINWINDOW_H
