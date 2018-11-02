@@ -19,6 +19,16 @@ TcpServerWorker::log(QString str)
 
 }
 
+QString TcpServerWorker::getClienName()
+{
+    QString name;
+
+    if( mClientType == TcpServerWorker::ClientType::PCTESTER ) name="PC";
+    if( mClientType == TcpServerWorker::ClientType::PADTESTER ) name="PAD";
+    name += mClientID;
+    return name;
+}
+
 void TcpServerWorker::setSocket( QTcpSocket *socket)
 {
     closeSocket();
@@ -38,6 +48,7 @@ void TcpServerWorker::closeSocket()
     mSocket = NULL;
     mClientType = TcpServerWorker::ClientType::UNKNOW;
     mClientID = "";
+    mLastMsg = "";
 
 }
 

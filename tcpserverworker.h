@@ -32,6 +32,7 @@ public:
     };
     sendAck(enum ACKType res);
     log(QString str);
+    QString getClienName();
 signals:
     void singal_data_received(TcpServerWorker *worker, QByteArray data);
     void singal_socket_abort(TcpServerWorker *worker);

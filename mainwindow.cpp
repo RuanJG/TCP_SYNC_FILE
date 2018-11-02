@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "QMessageBox"
+#include <QTimer>
+#include <QDateTime>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -25,11 +27,8 @@ MainWindow::MainWindow(QWidget *parent) :
     if( !mDataStorer.ReadInitPcDataFile(PCfile, res) )
     {
         QMessageBox::warning(this,tr("错误"), res);
-        //qApp->quit();
+        QTimer::singleShot(0,qApp,SLOT(quit()));
     }
-
-
-
 }
 
 MainWindow::~MainWindow()
@@ -163,11 +162,10 @@ bool MainWindow::pc_tester_data_check_and_store( TcpServerWorker *worker, QStrin
     QString str;
     str = QString::fromLocal8Bit(data);
     log("receive pc data:"+str);
-    saveMsgToFile(mPCMsgBackupfile, str);
+    saveMsgToFile(mPCMsgBackupfile, worker->getClienName()+" "+str);
 
     //如果同一信息发两次，当是要覆盖
     bool replaced = worker->mLastMsg == str;
-    log("new>"+str+"\n"+worker->mLastMsg);
 
     DataStorer::DATASTORER_ERROR_TYPE storeRes = mDataStorer.storePcDataFromPcMsg( str,replaced );
     switch(storeRes)
@@ -200,8 +198,30 @@ bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QStrin
     QString msg;
     msg = QString::fromLocal8Bit(data);
 
-    worker->sendAck(TcpServerWorker::ACKType::OK);
-    saveMsgToFile(mPADMsgBackupfile, msg);
+    //worker->sendAck(TcpServerWorker::ACKType::OK);
+    saveMsgToFile(mPADMsgBackupfile, worker->getClienName()+" "+msg);
+    log("receive pad data:"+msg);
+
+
+    bool replaced = worker->mLastMsg == msg;
+    DataStorer::DATASTORER_ERROR_TYPE storeRes = mDataStorer.storePcDataFromPcMsg( msg,replaced );
+    switch(storeRes)
+    {
+    case DataStorer::ERROR_DATA:
+        worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
+        break;
+    case DataStorer::ERROR_FILE_ERROR:
+        worker->sendAck(TcpServerWorker::ACKType::ERROR_FILE);
+        break;
+    case DataStorer::ERROR_REPEAT_BARCODE:
+        worker->sendAck(TcpServerWorker::ACKType::ERROR_REPEAT_BARCODE);
+        worker->mLastMsg = msg;
+        break;
+    case DataStorer::ERROR_NONE:
+        worker->sendAck(TcpServerWorker::ACKType::OK);
+        break;
+    }
+
 
 
     mPADDataMute.unlock();
@@ -214,8 +234,7 @@ MainWindow::slot_worker_data_received( TcpServerWorker *worker,QByteArray buffer
     if( worker->mClientType == TcpServerWorker::ClientType::UNKNOW || worker->mClientID == ""){
         server_setup_worker_id_type( worker, buffer);
         if( worker->mClientType != TcpServerWorker::ClientType::UNKNOW && worker->mClientID != ""){
-            QString name = worker->mClientType == TcpServerWorker::ClientType::PCTESTER ? "PC":"PAD";
-            log("Client joined: "+name+worker->mClientID);
+            log("Client joined: "+worker->getClienName());
         }
         return 0;
     }

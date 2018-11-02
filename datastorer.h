@@ -24,6 +24,13 @@ public:
         QString leftInteval;
         QString rightInterval;
     }PcData;
+    typedef struct _PadData{
+        QString barcode;
+        QString mac;
+        QString temp_comp;
+        QString Cali_ADC;
+        QString UID;
+    }PadData;
 
     DataStorer::DATASTORER_ERROR_TYPE storePcDataFromPcMsg(QString msg, bool replaced = false);
     bool isContainItem(QString id);
@@ -31,6 +38,10 @@ public:
     bool MsgToPcData(QString line, PcData &pdata);
     QString PcDataToMsg(PcData pdata);
     QString getPCDataFile();
+    QString PadDataToMsg(PadData pdata);
+    bool MsgToPadData(QString msg, PadData &pdata);
+    QString getPadDataFile();
+    bool getFileMd5(QString file, QString &md5code);
 signals:
 
 public slots:

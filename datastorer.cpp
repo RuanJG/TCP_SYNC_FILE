@@ -1,4 +1,5 @@
 #include "datastorer.h"
+#include <QCryptographicHash>
 
 DataStorer::DataStorer(QObject *parent) :
     QObject(parent),
@@ -16,8 +17,8 @@ bool DataStorer::MsgToPcData(QString line, PcData &pdata)
     QStringList data;
     QString value;
 
-    line.remove("\n");
-    data = line.split(" ");
+    //line.remove("\n");
+    data = line.split(QRegExp("\\s+"),QString::SkipEmptyParts);
 
     if( data.count() != 4 )
         return false;
@@ -28,6 +29,10 @@ bool DataStorer::MsgToPcData(QString line, PcData &pdata)
     //check barcode
     value = data.at(1);
     if( value.length() != 16) return false;
+    value = data.at(2);
+    if( value.length() != 4) return false;
+    value = data.at(3);
+    if( value.length() != 4) return false;
 
     pdata.date = data.at(0);
     pdata.barcode = data.at(1);
@@ -44,9 +49,57 @@ QString DataStorer::PcDataToMsg(PcData pdata)
     return msg;
 }
 
+bool DataStorer::MsgToPadData(QString msg, PadData &pdata)
+{
+    QStringList data;
+    QString value;
+
+    //msg.remove("\n");
+    data = msg.split(QRegExp("\\s+"),QString::SkipEmptyParts);
+    if( data.count() != 5 )
+        return false;
+
+    //check barcode
+    value = data.at(0);
+    if( value.length() != 16) return false;
+    //check
+    value = data.at(1);
+    if( value.length() != 2) return false;
+    //check
+    value = data.at(1);
+    if( value.length() != 2) return false;
+    //check
+    value = data.at(1);
+    if( value.length() != 2) return false;
+    //check
+    value = data.at(1);
+    if( value.length() != 2) return false;
+
+    pdata.barcode = data.at(0);
+    pdata.mac =     data.at(1);
+    pdata.temp_comp = data.at(2);
+    pdata.Cali_ADC = data.at(3);
+    pdata.UID =     data.at(4);
+
+
+    return true;
+}
+
+QString DataStorer::PadDataToMsg(PadData pdata)
+{
+    QString msg;
+    msg = pdata.barcode +" "+pdata.mac+" "+pdata.temp_comp+" "+pdata.Cali_ADC+" "+pdata.UID +"\n";
+    return msg;
+}
+
 QString DataStorer::getPCDataFile()
 {
     return mPcDataStoreFile.fileName();
+}
+
+QString DataStorer::getPadDataFile()
+{
+    return mPadDataStoreFile.fileName();
 }
 
 bool DataStorer::ReadInitPcDataFile(QString dfile, QString &errorStr)
@@ -132,3 +185,27 @@ DataStorer::DATASTORER_ERROR_TYPE DataStorer::storePcDataFromPcMsg(QString msg, 
 
 
 
+bool DataStorer::getFileMd5(QString file, QString &md5code)
+{
+    QFile localFile(file);
+
+    if (!localFile.open(QFile::ReadOnly))
+    {
+        return false;
+    }
+
+    QCryptographicHash ch(QCryptographicHash::Md5);
+    quint64 loadSize = 1024;
+    QByteArray buf;
+    while (true)
+    {
+        buf = localFile.read(loadSize);
+        if( buf.length() == 0) break;
+        ch.addData(buf);
+    }
+    md5code = QString(ch.result().toHex());
+
+    localFile.close();
+
+    return true;
+}
