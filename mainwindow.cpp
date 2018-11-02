@@ -195,32 +195,18 @@ bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QStrin
     bool res = true;
     mPADDataMute.lock();
 
-    QString msg;
-    msg = QString::fromLocal8Bit(data);
-
+    //QString msg;
+    //msg = QString::fromLocal8Bit(data);
     //worker->sendAck(TcpServerWorker::ACKType::OK);
-    saveMsgToFile(mPADMsgBackupfile, worker->getClienName()+" "+msg);
-    log("receive pad data:"+msg);
+    //saveMsgToFile(mPADMsgBackupfile, worker->getClienName()+" "+msg);
+    //log("receive pad data:"+msg);
 
-
-    bool replaced = worker->mLastMsg == msg;
-    DataStorer::DATASTORER_ERROR_TYPE storeRes = mDataStorer.storePcDataFromPcMsg( msg,replaced );
-    switch(storeRes)
-    {
-    case DataStorer::ERROR_DATA:
-        worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
-        break;
-    case DataStorer::ERROR_FILE_ERROR:
-        worker->sendAck(TcpServerWorker::ACKType::ERROR_FILE);
-        break;
-    case DataStorer::ERROR_REPEAT_BARCODE:
-        worker->sendAck(TcpServerWorker::ACKType::ERROR_REPEAT_BARCODE);
-        worker->mLastMsg = msg;
-        break;
-    case DataStorer::ERROR_NONE:
-        worker->sendAck(TcpServerWorker::ACKType::OK);
-        break;
+    if( data.length() < 16 ){
+        log(tr("无效的数据包<")+worker->getClienName());
+        return false;
     }
+    qint64 tag = data.left(16);
+    QByteArray msg = data.remove(0,16);
 
 
 

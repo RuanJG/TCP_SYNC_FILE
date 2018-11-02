@@ -107,7 +107,7 @@ bool DataStorer::ReadInitPcDataFile(QString dfile, QString &errorStr)
     QString line;
     QStringList list;
     PcData pcdata;
-    int pos;
+    qint64 pos;
 
     if( mPcDataStoreFile.isOpen() ) mPcDataStoreFile.close();
     mPcDataStoreFile.setFileName(dfile);
@@ -158,7 +158,7 @@ DataStorer::DATASTORER_ERROR_TYPE DataStorer::storePcDataFromPcMsg(QString msg, 
         return ERROR_DATA;
     }
 
-    int pos = mPcDataStoreFile.pos();
+    qint64 pos = mPcDataStoreFile.pos();
     if( isContainItem(pcdata.barcode))
     {
         if( !replaced )
@@ -207,5 +207,10 @@ bool DataStorer::getFileMd5(QString file, QString &md5code)
 
     localFile.close();
 
+    return true;
+}
+
+bool DataStorer::storePadDataFromPcMsg(QString clientname, qint64 pos, QByteArray data)
+{
     return true;
 }

@@ -42,13 +42,14 @@ public:
     bool MsgToPadData(QString msg, PadData &pdata);
     QString getPadDataFile();
     bool getFileMd5(QString file, QString &md5code);
+    bool storePadDataFromPcMsg(QString clientname, qint64 pos, QByteArray data);
 signals:
 
 public slots:
 
 private:
-    QMap <QString,int> mPcBarcodeMap;
-    QMap <QString,int> mPadBarcodeMap;
+    QMap <QString,qint64> mPcBarcodeMap;
+    QMap <QString,qint64> mPadBarcodeMap;
     QFile     mPcDataStoreFile;
     QFile     mPadDataStoreFile;
 
