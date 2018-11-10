@@ -12,7 +12,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow),
     mSocket(NULL),
     mPackgetReplied(false),
-    mSetting(qApp->applicationDirPath()+"\/clientSetting.ini",QSettings::IniFormat),
+    mSetting(qApp->applicationDirPath()+"\/Setting.ini",QSettings::IniFormat),
     mOneDataFile(false),
     mLastMsg()
 {
@@ -31,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->idLineEdit->setText(mSetting.value("net/id").toString());
     on_ConnectButton_clicked();
 
+    mOneDataFile = true;
     if( mOneDataFile )
     {
         if( mSetting.contains("data/savefile")){
@@ -41,6 +42,7 @@ MainWindow::MainWindow(QWidget *parent) :
             QString file = qApp->applicationDirPath()+"\/SBSdata.txt";
             ui->saveDataFilelineEdit->setText(file);
         }
+        ui->saveDataFilelineEdit->setReadOnly(true);
     }else{
         QDate date = QDate::currentDate();
         QString file = qApp->applicationDirPath()+"\/SBSdata_"+date.toString("yyyyMMdd")+".txt";
