@@ -3,6 +3,7 @@
 #include "QMessageBox"
 #include <QTimer>
 #include <QDateTime>
+#include <QFileInfo>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -18,7 +19,7 @@ MainWindow::MainWindow(QWidget *parent) :
     on_serverOnOFFButton_clicked();
 
     QString PCfile = qApp->applicationDirPath()+"\/SBS_PCdata.txt";
-    QString PADfile = qApp->applicationDirPath()+"\/SBS_PADdata.txt";
+
 
     mPCMsgBackupfile = qApp->applicationDirPath()+"\/SBS_PC_Msg_Backup.txt";
     mPADMsgBackupfile = qApp->applicationDirPath()+"\/SBS_PAD_Msg_Backup.txt";
@@ -142,12 +143,11 @@ MainWindow::server_setup_worker_id_type( TcpServerWorker *worker,QByteArray buff
         foreach( TcpServerWorker* w , mClientList){
             if( w->mClientID == id) hassameid = true;
         }
-        if( hassameid ){
+        if( hassameid && worker->mClientID != id){
             worker->sendAck(TcpServerWorker::ACKType::ERROR_ID);
         }else{
             worker->mClientID = id;
             worker->sendAck(TcpServerWorker::ACKType::OK);
-            log("receive id="+ id );
         }
     }else{
         worker->sendAck(TcpServerWorker::ACKType::ERROR_SETUP_ID_TYPE);
@@ -190,27 +190,77 @@ bool MainWindow::pc_tester_data_check_and_store( TcpServerWorker *worker, QStrin
     return res;
 }
 
+
+QString MainWindow::getPadDataFilePath(QString clientname)
+{
+    return  QString(qApp->applicationDirPath()+"\/SBS_PADdata"+clientname+".txt");
+}
+
 bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QString id, QByteArray data)
 {
     bool res = true;
-    mPADDataMute.lock();
+    //mPADDataMute.lock();
 
-    //QString msg;
-    //msg = QString::fromLocal8Bit(data);
-    //worker->sendAck(TcpServerWorker::ACKType::OK);
-    //saveMsgToFile(mPADMsgBackupfile, worker->getClienName()+" "+msg);
-    //log("receive pad data:"+msg);
-
-    if( data.length() < 16 ){
+    //tag[4 byte]+msg[n byte]
+    if( data.length() < 4 ){
         log(tr("无效的数据包<")+worker->getClienName());
+        worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
         return false;
     }
-    qint64 tag = data.left(16);
-    QByteArray msg = data.remove(0,16);
 
+    //get tag
+    int tag = mDataStorer.QByteArrayToInt(data.left(4));
+    //get msg
+    QByteArray msg = data.remove(0,4);
 
+    QFileInfo finfo(getPadDataFilePath(worker->getClienName()));
+    QByteArray pkg;
+    QString myMD5;
 
-    mPADDataMute.unlock();
+    log("get tag="+QString::number(tag));
+    switch( tag )
+    {
+    case MainWindow::MD5_CODE_TAG:
+        //pad send it's file md5(string) here, and I compare with my md5 , return the result
+        mDataStorer.getFileMd5( getPadDataFilePath(worker->getClienName()), myMD5);
+        if( myMD5 == QString(msg)){
+            worker->sendAck(TcpServerWorker::ACKType::OK);
+        }else{
+            worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
+        }
+        break;
+    case MainWindow::FILE_SIZE_TAG:
+        //ask for data
+        pkg = mDataStorer.intToQByteArray(MainWindow::FILE_SIZE_TAG);
+        pkg = pkg + mDataStorer.intToQByteArray((int)finfo.size());
+        worker->sendBytes(pkg);
+        break;
+    default:
+        if( tag < 0 ){
+            log(tr("未知的Tag<")+worker->getClienName());
+            worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
+            return false;
+        }
+        //file pos
+        if( tag > finfo.size() ){
+            log(tr("文件数据指针过大<")+worker->getClienName());
+            worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
+            return false;
+        }
+
+        if( ! mDataStorer.storePadDataFromPcMsg(getPadDataFilePath(worker->getClienName()), tag, msg))
+        {
+            log(tr("文件写数据错误"));
+            worker->sendAck(TcpServerWorker::ACKType::ERROR_FILE);
+        }else{
+            log("filefram pos="+QString::number(tag)+",data="+QString(msg));
+            worker->sendAck(TcpServerWorker::ACKType::OK);
+        }
+
+        break;
+    }
+
+    //mPADDataMute.unlock();
     return res;
 }
 

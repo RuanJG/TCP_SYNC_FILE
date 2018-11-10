@@ -52,6 +52,12 @@ void TcpServerWorker::closeSocket()
 
 }
 
+TcpServerWorker::sendBytes(QByteArray data)
+{
+    if( mSocket != NULL)
+        mSocket->write(data);
+}
+
 TcpServerWorker::sendAck(enum ACKType res)
 {
     if( mSocket != NULL)

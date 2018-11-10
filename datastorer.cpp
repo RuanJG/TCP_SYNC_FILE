@@ -1,5 +1,6 @@
 #include "datastorer.h"
 #include <QCryptographicHash>
+#include <QDebug>
 
 DataStorer::DataStorer(QObject *parent) :
     QObject(parent),
@@ -210,7 +211,47 @@ bool DataStorer::getFileMd5(QString file, QString &md5code)
     return true;
 }
 
-bool DataStorer::storePadDataFromPcMsg(QString clientname, qint64 pos, QByteArray data)
+
+bool DataStorer::storePadDataFromPcMsg(QString file, qint64 pos, QByteArray data)
 {
+    QFile pfile(file);
+
+    if( ! pfile.open(QFile::ReadWrite) ){
+        qDebug()<<"!!!!!!! open file "+file+" false";
+        return false;
+    }
+    if( !pfile.seek(pos)){
+        qDebug()<<"!!!!!!! file seek to "+QString::number(pos)+" false";
+        pfile.close();
+        return false;
+    }
+    if( -1 == pfile.write(data) ){
+        qDebug()<<"!!!!!!! file write data false";
+        pfile.close();
+        return false;
+    }
+
+    pfile.close();
     return true;
 }
+
+QByteArray  DataStorer::intToQByteArray(int i)
+{
+    QByteArray abyte0;
+    abyte0.resize(4);
+    abyte0[0] = (uchar)  (0x000000ff & i);
+    abyte0[1] = (uchar) ((0x0000ff00 & i) >> 8);
+    abyte0[2] = (uchar) ((0x00ff0000 & i) >> 16);
+    abyte0[3] = (uchar) ((0xff000000 & i) >> 24);
+    return abyte0;
+}
+
+int DataStorer::QByteArrayToInt(QByteArray bytes)
+{
+    int addr = bytes[0] & 0x000000FF;
+    addr |= ((bytes[1] << 8) & 0x0000FF00);
+    addr |= ((bytes[2] << 16) & 0x00FF0000);
+    addr |= ((bytes[3] << 24) & 0xFF000000);
+    return addr;
+}
+

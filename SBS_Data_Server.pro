@@ -24,3 +24,9 @@ HEADERS  += mainwindow.h \
     excelengine.h
 
 FORMS    += mainwindow.ui
+
+RC_FILE += logo.rc
+
+DISTFILES += \
+    logo.ico \
+    logo.rc

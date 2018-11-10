@@ -42,7 +42,9 @@ public:
     bool MsgToPadData(QString msg, PadData &pdata);
     QString getPadDataFile();
     bool getFileMd5(QString file, QString &md5code);
-    bool storePadDataFromPcMsg(QString clientname, qint64 pos, QByteArray data);
+    bool storePadDataFromPcMsg(QString file, qint64 pos, QByteArray data);
+    QByteArray intToQByteArray(int i);
+    int QByteArrayToInt(QByteArray bytes);
 signals:
 
 public slots:
