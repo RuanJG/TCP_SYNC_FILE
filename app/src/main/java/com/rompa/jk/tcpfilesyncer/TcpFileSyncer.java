@@ -63,7 +63,8 @@ public class TcpFileSyncer {
 
     public void Login()
     {
-        startTcpThread();
+        if( !isTcpConnected() )
+            startTcpThread();
     }
     public void Logout()
     {
@@ -82,8 +83,9 @@ public class TcpFileSyncer {
 
     private  void startTcpThread()
     {
-//        if( mTcpThreader != null && mTcpThreader.isAlive())
-//            return;
+        if( mTcpThreader != null) {
+            stopTcpThread();
+        }
         mTcpThreader = null;
         mTcpThreadStop = false;
         mTcpForceReconnect = false;
@@ -284,8 +286,10 @@ public class TcpFileSyncer {
         System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
         System.arraycopy(md5str.getBytes(), 0 , msg, tagbytes.length, md5str.length());
         sendTcpBytes(msg);
-        if(  listenAck(1000) )
+        if(  listenAck(1000) ) {
+            threadLog("同步文件成功\n");
             return;
+        }
         threadLog("同步文件失败：different MD5.\n");
     }
 

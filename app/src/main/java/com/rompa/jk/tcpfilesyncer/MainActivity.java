@@ -135,56 +135,75 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        Log.e("Ruan","onResume");
+
+        if( mContext == null ) return; // the bind and init will be done in onCreat
+
+        //mContext  = this.getApplicationContext();
+        bindFileSyncService();
+        Intent mIintent = new Intent();
+        mIintent.putExtra("cmd","start");
+        mIintent.setComponent(new ComponentName("com.rompa.jk.tcpfilesyncer","com.rompa.jk.tcpfilesyncer.SBSFileSyncService"));
+        mContext.startService(mIintent);
+    }
+
+    @Override
     protected void onDestroy() {
+        Log.e("Ruan","onDestroy");
+        mContext  = this.getApplicationContext();
         unBindFileSyncService();
         super.onDestroy();
     }
 
-    ServiceConnection serviceConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            SBSFileSyncService.SyncServiceBinder binder = (SBSFileSyncService.SyncServiceBinder) service;
-            mServer = binder.getService();
-            mServer.setOnServiceStatusListener(new SBSFileSyncService.OnServiceStatusListener() {
-                @Override
-                public void Log(String msg) {
-                    console.append(msg);
-                }
-                @Override
-                public void notify(String msg) {
-                    console.append(msg);
-                }
-                @Override
-                public void updateSetting(String ip, int port, String id, String pwd){
-                    ipText.setText(ip);
-                    portText.setText( String.valueOf(port));
-                    idText.setText(id);
-                    mPassword = pwd;
-                }
-            });
-            Intent mIintent = new Intent();
-            mIintent.putExtra("cmd","getSetting");
-            mIintent.setComponent(new ComponentName("com.rompa.jk.tcpfilesyncer","com.rompa.jk.tcpfilesyncer.SBSFileSyncService"));
-            mContext.startService(mIintent);
+    private volatile boolean hasbinded = false;
+    ServiceConnection serviceConnection;
+    private boolean bindFileSyncService()
+    {
+        if( hasbinded ) return true;
+        serviceConnection = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                SBSFileSyncService.SyncServiceBinder binder = (SBSFileSyncService.SyncServiceBinder) service;
+                mServer = binder.getService();
+                mServer.setOnServiceStatusListener(new SBSFileSyncService.OnServiceStatusListener() {
+                    @Override
+                    public void Log(String msg) {
+                        console.append(msg);
+                    }
+                    @Override
+                    public void notify(String msg) {
+                        console.append(msg);
+                    }
+                    @Override
+                    public void updateSetting(String ip, int port, String id, String pwd){
+                        ipText.setText(ip);
+                        portText.setText( String.valueOf(port));
+                        idText.setText(id);
+                        mPassword = pwd;
+                    }
+                });
+                Intent mIintent = new Intent();
+                mIintent.putExtra("cmd","getSetting");
+                mIintent.setComponent(new ComponentName("com.rompa.jk.tcpfilesyncer","com.rompa.jk.tcpfilesyncer.SBSFileSyncService"));
+                mContext.startService(mIintent);
 //            ipText.setText(mServer.getIp());
 //            portText.setText( String.valueOf( mServer.getPort() ));
 //            idText.setText(mServer.getID());
-        }
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-        }
-    };
+            }
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+            }
+        };
 
-    private volatile boolean hasbinded = false;
-    private boolean bindFileSyncService()
-    {
         Intent intent =  new Intent(MainActivity.this, SBSFileSyncService.class);
         hasbinded = mContext.bindService(intent, serviceConnection, BIND_AUTO_CREATE);
         return hasbinded;
     }
     private void unBindFileSyncService()
     {
-        if( hasbinded && serviceConnection!=null ) {
+        if( hasbinded) {
             hasbinded = false;
             mServer.setOnServiceStatusListener(null);
             mContext.unbindService(serviceConnection);

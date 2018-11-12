@@ -100,8 +100,10 @@ public class SBSFileSyncService extends Service {
             }
         }else if( cmd.equals("newdata")){
             Log.e("Ruan:","data:"+intent.getStringExtra("data"));
+            if( !mTcpSyncer.isTcpConnected() )
+                mTcpSyncer.Login();
             if( mClientListener != null)
-                mClientListener.Log("data: "+intent.getStringExtra("data"));
+                mClientListener.Log("data: "+intent.getStringExtra("data")+"\n");
         }
         return super.onStartCommand(intent,flags,startId);
     }
