@@ -26,7 +26,8 @@ public:
     enum ClientType {
         UNKNOW = 1,
         PCTESTER = 2,
-        PADTESTER = 3
+        PADTESTER = 3,
+        PCTESTER_TC = 4   // 做过温保后的测试
     };
     enum ACKType {
         OK = 0,
@@ -63,6 +64,12 @@ private slots:
 
     void on_saveDataFilelineEdit_textChanged(const QString &arg1);
 
+    void on_pushButton_clicked();
+
+    void on_gapBeforTempCailradioButton_clicked();
+
+    void on_GapafterTemptureCailradioButton_2_clicked();
+
 private:
     Ui::MainWindow *ui;
     QTcpSocket *mSocket;
@@ -76,6 +83,7 @@ private:
     QFile dataFile;
     bool mOneDataFile;
     QString mLastMsg;
+    bool mSavefilenameChangeAble;
 
 
     disableNetworkSetting(bool disable);

@@ -6,6 +6,7 @@
 #include <QKeyEvent>
 #include <QDate>
 #include <QDateTime>
+#include <QInputDialog>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -14,13 +15,15 @@ MainWindow::MainWindow(QWidget *parent) :
     mPackgetReplied(false),
     mSetting(qApp->applicationDirPath()+"\/Setting.ini",QSettings::IniFormat),
     mOneDataFile(false),
-    mLastMsg()
+    mLastMsg(),
+    mSavefilenameChangeAble(false)
 {
     ui->setupUi(this);
     ui->ConnectButton->setText(tr("连接服务器"));
     mStep = 0;
 
     ui->tabWidget->setCurrentIndex(1);
+
     disableDataInputState();
 
     if( mSetting.contains("net/ip"))
@@ -32,14 +35,18 @@ MainWindow::MainWindow(QWidget *parent) :
     on_ConnectButton_clicked();
 
     mOneDataFile = true;
+    mSavefilenameChangeAble = false;
     if( mOneDataFile )
     {
-        if( mSetting.contains("data/savefile")){
+        if(mSavefilenameChangeAble && mSetting.contains("data/savefile")){
             //QString file = mSetting.value("data/savefile").toString();
             ui->saveDataFilelineEdit->setText(mSetting.value("data/savefile").toString());
         }else{
             //QString file2 = mSetting.value("data/savefile").toString();
-            QString file = qApp->applicationDirPath()+"\/SBSdata.txt";
+            QString tc;
+            bool beforTC = ui->gapBeforTempCailradioButton->isChecked();
+            tc = beforTC?tr("温保前"):tr("温保后");
+            QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
             ui->saveDataFilelineEdit->setText(file);
         }
         ui->saveDataFilelineEdit->setReadOnly(true);
@@ -58,8 +65,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->rightlineEdit,SIGNAL(returnPressed()),this, SLOT(slot_rightedit_get_Return_KEY()));
 
     ui->datatextBrowser->append(tr("时间----------  序列号---------- 左间隙-右间隙"));
-
 }
+
 
 MainWindow::~MainWindow()
 {
@@ -284,7 +291,12 @@ void MainWindow::syncLoop(QByteArray data)
                 //send type
                 log("send type...");
                 ui->stateLabel->setText(tr("认证 TYPE..."));
-                typePack = "TYPE"+QString::number(ClientType::PCTESTER);
+                if(ui->gapBeforTempCailradioButton->isChecked()){
+                    typePack = "TYPE"+QString::number(ClientType::PCTESTER);
+                }else{
+                    //已做过温保
+                    typePack = "TYPE"+QString::number(ClientType::PCTESTER_TC);
+                }
                 mSocket->write(typePack.toLocal8Bit());
                 mStep++;
                 break;
@@ -303,6 +315,14 @@ void MainWindow::syncLoop(QByteArray data)
                 QMessageBox::warning(this,tr("错误"), tr("到达未知步骤"),NULL,NULL);
                 break;
             }
+            break;
+        case MainWindow::ACKType::ERROR_ID:
+            QMessageBox::warning(this,tr("错误"), tr("ID重复，重新设置"),NULL,NULL);
+            disconnectServer();
+            break;
+        case MainWindow::ACKType::ERROR_TYPE:
+            QMessageBox::warning(this,tr("错误"), tr("登录认证错误"),NULL,NULL);
+            disconnectServer();
             break;
         case MainWindow::ACKType::ERROR_DATA:
             QMessageBox::warning(this,tr("通讯错误"), tr("数据包错误"),NULL,NULL);
@@ -360,15 +380,6 @@ void MainWindow::on_ConnectButton_clicked()
 
 void MainWindow::on_sendButton_clicked()
 {
-    if(mSocket->state() == QAbstractSocket::ConnectedState){
-        if( mStep == 2 && mPackgetReplied ){
-            log("send data...");
-            mPackgetReplied = false;
-            mSocket->write(ui->sendDatalineEdit->text().toLocal8Bit());
-        }else{
-            QMessageBox::warning(this,tr("错误"), tr("上次信息还没收到ACK"),NULL,NULL);
-        }
-    }
 
 }
 
@@ -483,4 +494,52 @@ void MainWindow::on_saveDataFilelineEdit_textChanged(const QString &arg1)
     //on_saveSettingpushButton_clicked();
     mSetting.setValue("data/savefile",arg1);
     mSetting.sync();
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+    if( ui->idLineEdit->isReadOnly()){
+        bool ok;
+        QString pwd = QInputDialog::getText(this,tr("认证"),tr("密码:"));
+        if( pwd == "a123"){
+            if( mSavefilenameChangeAble )
+                ui->saveDataFilelineEdit->setReadOnly(false);
+            ui->ipLineEdit->setReadOnly(false);
+            ui->idLineEdit->setReadOnly(false);
+            ui->portLineEdit->setReadOnly(false);
+            ui->pushButton->setText(tr("确定"));
+            ui->gapBeforTempCailradioButton->setEnabled(true);
+            ui->GapafterTemptureCailradioButton_2->setEnabled(true);
+
+            disconnectServer();
+        }
+
+    }else{
+        ui->saveDataFilelineEdit->setReadOnly(true);
+        ui->ipLineEdit->setReadOnly(true);
+        ui->idLineEdit->setReadOnly(true);
+        ui->portLineEdit->setReadOnly(true);
+        ui->pushButton->setText(tr("修改设置"));
+        ui->gapBeforTempCailradioButton->setEnabled(false);
+        ui->GapafterTemptureCailradioButton_2->setEnabled(false);
+        connectServer();
+    }
+}
+
+
+void MainWindow::on_gapBeforTempCailradioButton_clicked()
+{
+
+    QString tc = tr("温保前");
+    QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
+    ui->saveDataFilelineEdit->setText(file);
+}
+
+
+void MainWindow::on_GapafterTemptureCailradioButton_2_clicked()
+{
+
+    QString tc = tr("温保后");
+    QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
+    ui->saveDataFilelineEdit->setText(file);
 }
