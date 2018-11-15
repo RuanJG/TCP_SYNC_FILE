@@ -8,7 +8,7 @@ QT       += core gui network printsupport axcontainer
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = SBS_Data_Server
+TARGET = SBSDataServer
 TEMPLATE = app
 
 

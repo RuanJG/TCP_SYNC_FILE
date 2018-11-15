@@ -13,12 +13,14 @@ MainWindow::MainWindow(QWidget *parent) :
     mPCDataMute(),
     mPADDataMute(),
     mSetting("serverSetting.ini",QSettings::IniFormat),
-    mDataStorer()
+    mDataStorer(),
+    mTCDataStorer()
 {
     ui->setupUi(this);
     on_serverOnOFFButton_clicked();
 
-    QString PCfile = qApp->applicationDirPath()+"\/SBS_PCdata.txt";
+    QString PCfile = qApp->applicationDirPath()+"\/SBS_GapData.txt";
+    QString PC_TC_file = qApp->applicationDirPath()+"\/SBS_GapData_TemptureCompensation.txt";
 
 
     mPCMsgBackupfile = qApp->applicationDirPath()+"\/SBS_PC_Msg_Backup.txt";
@@ -28,6 +30,13 @@ MainWindow::MainWindow(QWidget *parent) :
     if( !mDataStorer.ReadInitPcDataFile(PCfile, res) )
     {
         QMessageBox::warning(this,tr("错误"), res);
+        QTimer::singleShot(0,qApp,SLOT(quit()));
+    }
+
+    mPC_TC_MsgBackupfile = qApp->applicationDirPath()+"\/SBS_PC_TC_Msg_Backup.txt";
+    if( !mTCDataStorer.ReadInitPcDataFile(PC_TC_file, res) )
+    {
+        QMessageBox::warning(this,tr("打开温补Gap文件错误"), res);
         QTimer::singleShot(0,qApp,SLOT(quit()));
     }
 }
@@ -128,7 +137,7 @@ MainWindow::server_setup_worker_id_type( TcpServerWorker *worker,QByteArray buff
         //setup type
         type = data.right(1).toInt();
 
-        if( type > TcpServerWorker::ClientType::UNKNOW && type <= TcpServerWorker::ClientType::PADTESTER )
+        if( type > TcpServerWorker::ClientType::UNKNOW && type <= TcpServerWorker::ClientType::PCTESTER_TC )
         {
            worker->mClientType = type;
            worker->sendAck(TcpServerWorker::ACKType::OK);
@@ -143,6 +152,7 @@ MainWindow::server_setup_worker_id_type( TcpServerWorker *worker,QByteArray buff
         foreach( TcpServerWorker* w , mClientList){
             if( w->mClientID == id) hassameid = true;
         }
+
         if( hassameid && worker->mClientID != id){
             worker->sendAck(TcpServerWorker::ACKType::ERROR_ID);
         }else{
@@ -161,13 +171,24 @@ bool MainWindow::pc_tester_data_check_and_store( TcpServerWorker *worker, QStrin
 
     QString str;
     str = QString::fromLocal8Bit(data);
-    log("receive pc data:"+str);
-    saveMsgToFile(mPCMsgBackupfile, worker->getClienName()+" "+str);
+    //log("receive pc data:"+str);
+    if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER){
+        saveMsgToFile(mPCMsgBackupfile, worker->getClienName()+" "+str);
+    }else if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_TC){
+        saveMsgToFile(mPC_TC_MsgBackupfile, worker->getClienName()+" "+str);
+    }
 
     //如果同一信息发两次，当是要覆盖
     bool replaced = worker->mLastMsg == str;
 
-    DataStorer::DATASTORER_ERROR_TYPE storeRes = mDataStorer.storePcDataFromPcMsg( str,replaced );
+
+    DataStorer::DATASTORER_ERROR_TYPE storeRes;
+    if(worker->mClientType == TcpServerWorker::ClientType::PCTESTER){
+        storeRes= mDataStorer.storePcDataFromPcMsg( str,replaced );
+    }else{
+        storeRes= mTCDataStorer.storePcDataFromPcMsg( str,replaced );
+    }
+
     switch(storeRes)
     {
     case DataStorer::ERROR_DATA:
@@ -280,6 +301,8 @@ MainWindow::slot_worker_data_received( TcpServerWorker *worker,QByteArray buffer
         pc_tester_data_check_and_store(worker, worker->mClientID,buffer) ;
     }else if( worker->mClientType == TcpServerWorker::ClientType::PADTESTER ){
         pad_tester_data_check_and_store(worker,worker->mClientID,buffer);
+    }else if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_TC){
+        pc_tester_data_check_and_store(worker, worker->mClientID,buffer) ;
     }else{
         log(tr("客户端类型有错"));
         worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);

@@ -19,7 +19,8 @@ public:
     enum ClientType {
         UNKNOW = 1,
         PCTESTER = 2,
-        PADTESTER = 3
+        PADTESTER = 3,
+        PCTESTER_TC = 4   // 做过温保后的测试
     };
     enum ACKType {
         OK = 0,

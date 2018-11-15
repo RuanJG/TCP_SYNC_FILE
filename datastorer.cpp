@@ -160,12 +160,14 @@ DataStorer::DATASTORER_ERROR_TYPE DataStorer::storePcDataFromPcMsg(QString msg, 
     }
 
     qint64 pos = mPcDataStoreFile.pos();
+    qint64 insert_pos = pos;
     if( isContainItem(pcdata.barcode))
     {
         if( !replaced )
             return ERROR_REPEAT_BARCODE;
 
-        if( ! mPcDataStoreFile.seek(mPcBarcodeMap.value(pcdata.barcode)) ){
+        insert_pos = mPcBarcodeMap.value(pcdata.barcode);
+        if( ! mPcDataStoreFile.seek(insert_pos) ){
             mPcDataStoreFile.seek(pos);
             return DataStorer::ERROR_FILE_ERROR;
         }
@@ -180,7 +182,7 @@ DataStorer::DATASTORER_ERROR_TYPE DataStorer::storePcDataFromPcMsg(QString msg, 
     }
 
     mPcDataStoreFile.flush();
-    mPcBarcodeMap.insert(pcdata.barcode,pos);
+    mPcBarcodeMap.insert(pcdata.barcode,insert_pos);
     return ERROR_NONE;
 }
 

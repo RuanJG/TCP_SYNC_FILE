@@ -49,6 +49,8 @@ private:
     DataStorer mDataStorer;
     QString mPCMsgBackupfile ;
     QString mPADMsgBackupfile;
+    QString mPC_TC_MsgBackupfile ;
+    DataStorer mTCDataStorer;
     bool start_server_listen();
     server_setup_worker_id_type(TcpServerWorker *worker, QByteArray buffer);
     bool pc_tester_data_check_and_store(TcpServerWorker *worker,QString id, QByteArray data);

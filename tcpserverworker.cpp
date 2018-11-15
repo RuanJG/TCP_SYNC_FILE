@@ -25,6 +25,7 @@ QString TcpServerWorker::getClienName()
 
     if( mClientType == TcpServerWorker::ClientType::PCTESTER ) name="PC";
     if( mClientType == TcpServerWorker::ClientType::PADTESTER ) name="PAD";
+    if( mClientType == TcpServerWorker::ClientType::PCTESTER_TC ) name="PC_TC";
     name += mClientID;
     return name;
 }
