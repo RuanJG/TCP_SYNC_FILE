@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>909</width>
-    <height>515</height>
+    <width>892</width>
+    <height>443</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -29,7 +29,7 @@
          <attribute name="title">
           <string>设置</string>
          </attribute>
-         <widget class="QWidget" name="">
+         <widget class="QWidget" name="layoutWidget">
           <property name="geometry">
            <rect>
             <x>11</x>
@@ -105,7 +105,7 @@
                 </size>
                </property>
                <property name="text">
-                <string>IP地址</string>
+                <string>IP地址/主机名</string>
                </property>
               </widget>
              </item>
@@ -252,6 +252,105 @@
             </widget>
            </item>
            <item>
+            <widget class="QRadioButton" name="adjustRadioButton">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="text">
+              <string>调校后</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_6">
+             <property name="spacing">
+              <number>7</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="label_8">
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Gap最小值mm</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="minGaplineEdit">
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_4">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_7">
+             <item>
+              <widget class="QLabel" name="label_9">
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Gap最大值mm</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="maxGaplineEdit_2">
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_5">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
             <widget class="QPushButton" name="pushButton">
              <property name="maximumSize">
               <size>
@@ -275,7 +374,7 @@
           <property name="geometry">
            <rect>
             <x>110</x>
-            <y>40</y>
+            <y>70</y>
             <width>151</width>
             <height>31</height>
            </rect>
@@ -293,8 +392,8 @@
          <widget class="QLabel" name="label_2">
           <property name="geometry">
            <rect>
-            <x>20</x>
-            <y>50</y>
+            <x>10</x>
+            <y>80</y>
             <width>71</width>
             <height>21</height>
            </rect>
@@ -306,8 +405,8 @@
          <widget class="QLabel" name="label_3">
           <property name="geometry">
            <rect>
-            <x>20</x>
-            <y>110</y>
+            <x>10</x>
+            <y>140</y>
             <width>72</width>
             <height>15</height>
            </rect>
@@ -319,8 +418,8 @@
          <widget class="QLabel" name="label_4">
           <property name="geometry">
            <rect>
-            <x>20</x>
-            <y>160</y>
+            <x>10</x>
+            <y>190</y>
             <width>72</width>
             <height>15</height>
            </rect>
@@ -333,7 +432,7 @@
           <property name="geometry">
            <rect>
             <x>110</x>
-            <y>100</y>
+            <y>130</y>
             <width>151</width>
             <height>31</height>
            </rect>
@@ -349,7 +448,7 @@
           <property name="geometry">
            <rect>
             <x>110</x>
-            <y>160</y>
+            <y>180</y>
             <width>151</width>
             <height>31</height>
            </rect>
@@ -365,9 +464,9 @@
           <property name="geometry">
            <rect>
             <x>0</x>
-            <y>210</y>
+            <y>230</y>
             <width>411</width>
-            <height>91</height>
+            <height>71</height>
            </rect>
           </property>
           <property name="sizePolicy">
@@ -403,7 +502,7 @@
           <property name="geometry">
            <rect>
             <x>290</x>
-            <y>150</y>
+            <y>170</y>
             <width>121</width>
             <height>41</height>
            </rect>
@@ -416,7 +515,7 @@
           <property name="geometry">
            <rect>
             <x>290</x>
-            <y>30</y>
+            <y>70</y>
             <width>121</width>
             <height>41</height>
            </rect>
@@ -432,13 +531,33 @@
           <property name="geometry">
            <rect>
             <x>290</x>
-            <y>90</y>
+            <y>120</y>
             <width>121</width>
             <height>41</height>
            </rect>
           </property>
           <property name="text">
            <string>重新输入</string>
+          </property>
+         </widget>
+         <widget class="QLabel" name="gapTypelabel_8">
+          <property name="geometry">
+           <rect>
+            <x>130</x>
+            <y>10</y>
+            <width>191</width>
+            <height>41</height>
+           </rect>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>14</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string/>
           </property>
          </widget>
         </widget>

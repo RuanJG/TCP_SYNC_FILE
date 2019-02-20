@@ -27,7 +27,8 @@ public:
         UNKNOW = 1,
         PCTESTER = 2,
         PADTESTER = 3,
-        PCTESTER_TC = 4   // 做过温保后的测试
+        PCTESTER_TC = 4,   // 做过温保后的测试
+        PCTESTER_ADJUST = 5
     };
     enum ACKType {
         OK = 0,
@@ -69,6 +70,12 @@ private slots:
     void on_gapBeforTempCailradioButton_clicked();
 
     void on_GapafterTemptureCailradioButton_2_clicked();
+
+    void on_adjustRadioButton_clicked();
+
+    void on_minGaplineEdit_textChanged(const QString &arg1);
+
+    void on_maxGaplineEdit_2_textChanged(const QString &arg1);
 
 private:
     Ui::MainWindow *ui;

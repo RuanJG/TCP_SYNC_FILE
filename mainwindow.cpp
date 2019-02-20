@@ -14,7 +14,7 @@ MainWindow::MainWindow(QWidget *parent) :
     mSocket(NULL),
     mPackgetReplied(false),
     mSetting(qApp->applicationDirPath()+"\/Setting.ini",QSettings::IniFormat),
-    mOneDataFile(false),
+    mOneDataFile(true),
     mLastMsg(),
     mSavefilenameChangeAble(false)
 {
@@ -32,10 +32,38 @@ MainWindow::MainWindow(QWidget *parent) :
         ui->portLineEdit->setText(mSetting.value("net/port").toString());
     if( mSetting.contains("net/id"))
         ui->idLineEdit->setText(mSetting.value("net/id").toString());
+    if( mSetting.contains("ui/TemptureCompensation") ){
+        if (mSetting.value("ui/TemptureCompensation").toString() == "Yes"){
+            ui->GapafterTemptureCailradioButton_2->setChecked(true);
+            ui->gapTypelabel_8->setText(tr("录入温保后数据"));
+        }else if(mSetting.value("ui/TemptureCompensation").toString() == "No" ){
+            ui->GapafterTemptureCailradioButton_2->setChecked(true);
+            ui->gapTypelabel_8->setText(tr("录入温保前数据"));
+        }else if( mSetting.value("ui/TemptureCompensation").toString() == "Adjust"  ){
+            ui->adjustRadioButton->setChecked(true);
+            ui->gapTypelabel_8->setText(tr("录入调校后数据"));
+        }else{
+            ui->GapafterTemptureCailradioButton_2->setChecked(true);
+            ui->gapTypelabel_8->setText(tr("录入温保后数据"));
+        }
+    }
+    if(mSetting.contains("parameter/gapmin")){
+        ui->minGaplineEdit->setText(mSetting.value("parameter/gapmin").toString());
+    }else{
+        ui->minGaplineEdit->setText("6.45");
+        mSetting.setValue("parameter/gapmin","6.45");
+        mSetting.sync();
+    }
+    if(mSetting.contains("parameter/gapmax")){
+        ui->maxGaplineEdit_2->setText(mSetting.value("parameter/gapmax").toString());
+    }else{
+        ui->maxGaplineEdit_2->setText("6.55");
+        mSetting.setValue("parameter/gapmax","6.55");
+        mSetting.sync();
+    }
+    ui->gapTypelabel_8->setStyleSheet("color:blue;");
     on_ConnectButton_clicked();
 
-    mOneDataFile = true;
-    mSavefilenameChangeAble = false;
     if( mOneDataFile )
     {
         if(mSavefilenameChangeAble && mSetting.contains("data/savefile")){
@@ -44,8 +72,9 @@ MainWindow::MainWindow(QWidget *parent) :
         }else{
             //QString file2 = mSetting.value("data/savefile").toString();
             QString tc;
-            bool beforTC = ui->gapBeforTempCailradioButton->isChecked();
-            tc = beforTC?tr("温保前"):tr("温保后");
+            if( ui->gapBeforTempCailradioButton->isChecked() ) tc = tr("温保前");
+            if( ui->GapafterTemptureCailradioButton_2->isChecked() ) tc = tr("温保后");
+            if( ui->adjustRadioButton->isChecked() ) tc = tr("调整后");
             QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
             ui->saveDataFilelineEdit->setText(file);
         }
@@ -233,7 +262,16 @@ MainWindow::connectServer()
     //connect(mSocket, &QTcpSocket::disconnected, this, socket_Disconnected);
     //connect(mSocket, &QTcpSocket::connected, this, socket_Connected);
     connect(mSocket, &QTcpSocket::stateChanged, this, socket_state);
-    mSocket->connectToHost(QHostAddress(ip) , port);
+
+    QHostAddress addr = QHostAddress(ip);
+    if( addr.toString() == ip){
+        log("connect ip:"+ip);
+        mSocket->connectToHost(QHostAddress(ip) , port);
+    }else{
+        log("connect hostname:"+ip);
+        mSocket->connectToHost(ip,port);
+    }
+
     log("connecting "+ip+":"+QString::number(port)+"...");
 }
 
@@ -293,9 +331,14 @@ void MainWindow::syncLoop(QByteArray data)
                 ui->stateLabel->setText(tr("认证 TYPE..."));
                 if(ui->gapBeforTempCailradioButton->isChecked()){
                     typePack = "TYPE"+QString::number(ClientType::PCTESTER);
-                }else{
+                }else if( ui->GapafterTemptureCailradioButton_2->isChecked()){
                     //已做过温保
                     typePack = "TYPE"+QString::number(ClientType::PCTESTER_TC);
+                }else if ( ui->adjustRadioButton->isChecked()){
+                    typePack = "TYPE"+QString::number(ClientType::PCTESTER_ADJUST);
+                }else{
+                    QMessageBox::warning(this,tr("认证失败"),tr("请选择Gap数据类型（温保前后或调校"));
+                    break ;
                 }
                 mSocket->write(typePack.toLocal8Bit());
                 mStep++;
@@ -414,14 +457,20 @@ void MainWindow::slot_barcodeEdit_get_Return_KEY()
         updateDataInputState();
     }
 }
+
 void MainWindow::slot_leftedit_get_Return_KEY()
 {
     bool inttostring =false;
     float value = 0.0;
+    float min = mSetting.value("parameter/gapmin").toFloat();
+    float max = mSetting.value("parameter/gapmax").toFloat();
+    //min = min-0.001;
+    //max = max + 0.001;
 
     value = ui->leftlineEdit->text().toFloat(&inttostring);
-    if( !inttostring || value<= 0.44 ||value>= 0.56 ){
-        QMessageBox::warning(this,tr("错误"),tr("数据不在[0.45~0.55]范围内，产品不良！"),NULL,NULL);
+
+    if(  !inttostring || ( ui->adjustRadioButton->isChecked() && (value< min ||value> max)) ){
+        QMessageBox::warning(this,tr("错误"),tr("产品不良,数据不在范围[%1,%2]内").arg(min).arg(max),NULL,NULL);
         disableDataInputState();
         updateDataInputState();
     }else{
@@ -432,10 +481,14 @@ void MainWindow::slot_rightedit_get_Return_KEY()
 {
     bool inttostring =false;
     float value = 0.0;
+    float min = mSetting.value("parameter/gapmin").toFloat();
+    float max = mSetting.value("parameter/gapmax").toFloat();
+    //min = min-0.001;
+    //max = max + 0.001;
 
     value = ui->rightlineEdit->text().toFloat(&inttostring);
-    if( !inttostring || value<= 0.44 ||value>= 0.56 ){
-        QMessageBox::warning(this,tr("错误"),tr("数据不在[0.45~0.55]范围内，产品不良！"));
+    if( !inttostring || ( ui->adjustRadioButton->isChecked() && (value< min ||value> max)) ){
+        QMessageBox::warning(this,tr("错误"),tr("产品不良,数据不在范围[%1,%2]内").arg(min).arg(max),NULL,NULL);
         disableDataInputState();
         updateDataInputState();
     }else{
@@ -507,10 +560,12 @@ void MainWindow::on_pushButton_clicked()
             ui->ipLineEdit->setReadOnly(false);
             ui->idLineEdit->setReadOnly(false);
             ui->portLineEdit->setReadOnly(false);
+            ui->maxGaplineEdit_2->setReadOnly(false);
+            ui->minGaplineEdit->setReadOnly(false);
             ui->pushButton->setText(tr("确定"));
             ui->gapBeforTempCailradioButton->setEnabled(true);
             ui->GapafterTemptureCailradioButton_2->setEnabled(true);
-
+            ui->adjustRadioButton->setEnabled(true);
             disconnectServer();
         }
 
@@ -519,9 +574,12 @@ void MainWindow::on_pushButton_clicked()
         ui->ipLineEdit->setReadOnly(true);
         ui->idLineEdit->setReadOnly(true);
         ui->portLineEdit->setReadOnly(true);
+        ui->minGaplineEdit->setReadOnly(true);
+        ui->maxGaplineEdit_2->setReadOnly(true);
         ui->pushButton->setText(tr("修改设置"));
         ui->gapBeforTempCailradioButton->setEnabled(false);
         ui->GapafterTemptureCailradioButton_2->setEnabled(false);
+        ui->adjustRadioButton->setEnabled(false);
         connectServer();
     }
 }
@@ -533,6 +591,8 @@ void MainWindow::on_gapBeforTempCailradioButton_clicked()
     QString tc = tr("温保前");
     QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
     ui->saveDataFilelineEdit->setText(file);
+    mSetting.setValue("ui/TemptureCompensation", "No");
+    ui->gapTypelabel_8->setText(tr("录入温保前数据"));
 }
 
 
@@ -542,4 +602,30 @@ void MainWindow::on_GapafterTemptureCailradioButton_2_clicked()
     QString tc = tr("温保后");
     QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
     ui->saveDataFilelineEdit->setText(file);
+    mSetting.setValue("ui/TemptureCompensation", "Yes");
+    ui->gapTypelabel_8->setText(tr("录入温保后数据"));
+}
+
+void MainWindow::on_adjustRadioButton_clicked()
+{
+    QString tc = tr("调校后");
+    QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
+    ui->saveDataFilelineEdit->setText(file);
+    mSetting.setValue("ui/TemptureCompensation", "Adjust");
+    ui->gapTypelabel_8->setText(tr("录入调校后数据"));
+}
+
+
+
+
+void MainWindow::on_minGaplineEdit_textChanged(const QString &arg1)
+{
+    mSetting.setValue("parameter/gapmin",arg1);
+    mSetting.sync();
+}
+
+void MainWindow::on_maxGaplineEdit_2_textChanged(const QString &arg1)
+{
+    mSetting.setValue("parameter/gapmax",arg1);
+    mSetting.sync();
 }
