@@ -13,9 +13,11 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    serialcoder.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    serialcoder.h
 
 FORMS    += mainwindow.ui
 

@@ -16,7 +16,8 @@ MainWindow::MainWindow(QWidget *parent) :
     mSetting(qApp->applicationDirPath()+"\/Setting.ini",QSettings::IniFormat),
     mOneDataFile(true),
     mLastMsg(),
-    mSavefilenameChangeAble(false)
+    mSavefilenameChangeAble(false),
+    mCoder()
 {
     ui->setupUi(this);
     ui->ConnectButton->setText(tr("连接服务器"));
@@ -188,11 +189,32 @@ MainWindow::updateDataInputState()
 MainWindow::socket_Read_Data()
 {
     QByteArray buffer;
+    QByteArray pkg;
+    bool error;
 
     buffer = mSocket->readAll();
-    log("Server send :"+ QString::fromLocal8Bit(buffer));
-    syncLoop( buffer );
+    for( int i=0; i< buffer.length(); i++)
+    {
+        pkg = mCoder.parse(buffer.at(i),true,&error);
+        if( error ){
+            qDebug()<<("slot_worker_data_received: Coder parse error!!");
+        }else{
+            if( pkg.length() > 0 ){
+                log("Server send :"+ QString::fromLocal8Bit(pkg));
+                syncLoop(pkg);
+            }
+        }
+    }
 }
+
+MainWindow::sendBytes(QByteArray data)
+{
+
+    if( mSocket != NULL){
+        mSocket->write(mCoder.encode(data.data(),data.length(),true));
+    }
+}
+
 
 MainWindow::socket_Disconnected()
 {
@@ -340,7 +362,7 @@ void MainWindow::syncLoop(QByteArray data)
                     QMessageBox::warning(this,tr("认证失败"),tr("请选择Gap数据类型（温保前后或调校"));
                     break ;
                 }
-                mSocket->write(typePack.toLocal8Bit());
+                sendBytes(typePack.toLocal8Bit());
                 mStep++;
                 break;
             case 1:
@@ -377,7 +399,7 @@ void MainWindow::syncLoop(QByteArray data)
             if( QMessageBox::Yes == QMessageBox::warning(this,tr("数据错误"), tr("产品序列号有重复，是否要覆盖旧数据？"),QMessageBox::Yes,QMessageBox::No))
             {
                 //send the last msg again , mean that to replace the old record in the server.
-                mSocket->write(mLastMsg.toLocal8Bit());
+                sendBytes(mLastMsg.toLocal8Bit());
             }else{
                 disableDataInputState();
                 updateDataInputState();
@@ -395,7 +417,7 @@ void MainWindow::syncLoop(QByteArray data)
             log("send id...");
             ui->stateLabel->setText(tr("认证 ID..."));
             idpack = "ID"+ui->idLineEdit->text();
-            mSocket->write(idpack.toLocal8Bit());
+            sendBytes(idpack.toLocal8Bit());
         }
     }
 
@@ -438,7 +460,7 @@ void MainWindow::sendDataMessage()
         //if( mStep == 2 && mPackgetReplied ){
             log("send data...");
         //    mPackgetReplied = false;
-            mSocket->write(msg.toLocal8Bit());
+            sendBytes(msg.toLocal8Bit());
         //}else{
         //    QMessageBox::warning(this,tr("错误"), tr("上次信息还没收到ACK"),NULL,NULL);
         //}

@@ -6,6 +6,7 @@
 #include <QSettings>
 #include <QFile>
 #include <QStringListModel>
+#include <serialcoder.h>
 
 namespace Ui {
 class MainWindow;
@@ -40,6 +41,7 @@ public:
         ERROR_FILE
     };
     bool saveMsgToFile(QString msg);
+    sendBytes(QByteArray data);
 public slots:
     socket_Disconnected();
     socket_Connected();
@@ -91,6 +93,7 @@ private:
     bool mOneDataFile;
     QString mLastMsg;
     bool mSavefilenameChangeAble;
+    SerialCoder mCoder;
 
 
     disableNetworkSetting(bool disable);
