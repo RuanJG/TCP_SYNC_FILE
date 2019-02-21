@@ -29,6 +29,7 @@ public:
         QString mac;
         QString temp_comp;
         QString Cali_ADC;
+        QString Loadcellzero;
         QString UID;
     }PadData;
 

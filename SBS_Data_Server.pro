@@ -16,12 +16,14 @@ SOURCES += main.cpp\
         mainwindow.cpp \
     tcpserverworker.cpp \
     datastorer.cpp \
-    excelengine.cpp
+    excelengine.cpp \
+    serialcoder.cpp
 
 HEADERS  += mainwindow.h \
     tcpserverworker.h \
     datastorer.h \
-    excelengine.h
+    excelengine.h \
+    serialcoder.h
 
 FORMS    += mainwindow.ui
 

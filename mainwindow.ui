@@ -138,6 +138,19 @@
        </layout>
       </item>
       <item>
+       <widget class="QPushButton" name="mergepushButton">
+        <property name="maximumSize">
+         <size>
+          <width>100</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>合并数据</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QTextEdit" name="Console"/>
       </item>
      </layout>

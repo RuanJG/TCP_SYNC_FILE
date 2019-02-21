@@ -4,6 +4,9 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QDir>
+#include <QHostInfo>
+#include "serialcoder.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -14,17 +17,31 @@ MainWindow::MainWindow(QWidget *parent) :
     mPADDataMute(),
     mSetting("serverSetting.ini",QSettings::IniFormat),
     mDataStorer(),
-    mTCDataStorer()
+    mTCDataStorer(),
+    mAdjustedDataStorer(),
+    mExcel()
 {
     ui->setupUi(this);
     on_serverOnOFFButton_clicked();
 
-    QString PCfile = qApp->applicationDirPath()+"\/SBS_GapData.txt";
-    QString PC_TC_file = qApp->applicationDirPath()+"\/SBS_GapData_TemptureCompensation.txt";
+    QHostInfo info = QHostInfo::fromName(QHostInfo::localHostName());
+    ui->Console->append("Server HostName:"+QHostInfo::localHostName());
+    ui->Console->append("Server IP:");
+    foreach(QHostAddress address,info.addresses())
+    {
+        if(address.protocol() == QAbstractSocket::IPv4Protocol){
+            ui->Console->append(address.toString());
+        }
+    }
+
+    createDir(qApp->applicationDirPath()+"\/Data");
+    QString PCfile = qApp->applicationDirPath()+"\/Data\/SBS_GapData.txt";
+    QString PC_TC_file = qApp->applicationDirPath()+"\/Data\/SBS_GapData_TemptureCompensation.txt";
+    QString PC_Adjust_file = qApp->applicationDirPath()+"\/Data\/SBS_GapData_Adjusted.txt";
 
 
-    mPCMsgBackupfile = qApp->applicationDirPath()+"\/SBS_PC_Msg_Backup.txt";
-    mPADMsgBackupfile = qApp->applicationDirPath()+"\/SBS_PAD_Msg_Backup.txt";
+    mPCMsgBackupfile = qApp->applicationDirPath()+"\/Data\/SBS_PC_Msg_Backup.txt";
+    mPADMsgBackupfile = qApp->applicationDirPath()+"\/Data\/SBS_PAD_Msg_Backup.txt";
 
     QString res;
     if( !mDataStorer.ReadInitPcDataFile(PCfile, res) )
@@ -33,10 +50,17 @@ MainWindow::MainWindow(QWidget *parent) :
         QTimer::singleShot(0,qApp,SLOT(quit()));
     }
 
-    mPC_TC_MsgBackupfile = qApp->applicationDirPath()+"\/SBS_PC_TC_Msg_Backup.txt";
+    mPC_TC_MsgBackupfile = qApp->applicationDirPath()+"\/Data\/SBS_PC_TC_Msg_Backup.txt";
     if( !mTCDataStorer.ReadInitPcDataFile(PC_TC_file, res) )
     {
         QMessageBox::warning(this,tr("打开温补Gap文件错误"), res);
+        QTimer::singleShot(0,qApp,SLOT(quit()));
+    }
+
+    mPC_Adjusted_MsgBackupfile = qApp->applicationDirPath()+"\/Data\/SBS_PC_Adjusted_Msg_Backup.txt";
+    if( !mAdjustedDataStorer.ReadInitPcDataFile(PC_Adjust_file, res))
+    {
+        QMessageBox::warning(this,tr("打开调校Gap文件错误"), res);
         QTimer::singleShot(0,qApp,SLOT(quit()));
     }
 }
@@ -54,6 +78,18 @@ MainWindow::log(QString str)
 MainWindow::clearLog()
 {
     ui->Console->clear();
+}
+bool MainWindow::createDir(const QString &path)
+{
+    QDir dir(path);
+    if(dir.exists())
+    {
+        return true;
+    }else{
+        dir.setPath("");
+        bool ok = dir.mkpath(path);
+        return ok;
+    }
 }
 
 
@@ -137,7 +173,7 @@ MainWindow::server_setup_worker_id_type( TcpServerWorker *worker,QByteArray buff
         //setup type
         type = data.right(1).toInt();
 
-        if( type > TcpServerWorker::ClientType::UNKNOW && type <= TcpServerWorker::ClientType::PCTESTER_TC )
+        if( type > TcpServerWorker::ClientType::UNKNOW && type < TcpServerWorker::ClientType::TYPE_MAX )
         {
            worker->mClientType = type;
            worker->sendAck(TcpServerWorker::ACKType::OK);
@@ -176,6 +212,8 @@ bool MainWindow::pc_tester_data_check_and_store( TcpServerWorker *worker, QStrin
         saveMsgToFile(mPCMsgBackupfile, worker->getClienName()+" "+str);
     }else if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_TC){
         saveMsgToFile(mPC_TC_MsgBackupfile, worker->getClienName()+" "+str);
+    }else if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_ADJUST){
+        saveMsgToFile(mPC_Adjusted_MsgBackupfile, worker->getClienName()+" "+str);
     }
 
     //如果同一信息发两次，当是要覆盖
@@ -185,8 +223,12 @@ bool MainWindow::pc_tester_data_check_and_store( TcpServerWorker *worker, QStrin
     DataStorer::DATASTORER_ERROR_TYPE storeRes;
     if(worker->mClientType == TcpServerWorker::ClientType::PCTESTER){
         storeRes= mDataStorer.storePcDataFromPcMsg( str,replaced );
-    }else{
+    }else if ( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_ADJUST){
+        storeRes = mAdjustedDataStorer.storePcDataFromPcMsg(str,replaced);
+    }else if ( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_TC){
         storeRes= mTCDataStorer.storePcDataFromPcMsg( str,replaced );
+    }else{
+        storeRes= DataStorer::ERROR_DATA;
     }
 
     switch(storeRes)
@@ -214,29 +256,51 @@ bool MainWindow::pc_tester_data_check_and_store( TcpServerWorker *worker, QStrin
 
 QString MainWindow::getPadDataFilePath(QString clientname)
 {
-    return  QString(qApp->applicationDirPath()+"\/SBS_PADdata"+clientname+".txt");
+    return  QString(qApp->applicationDirPath()+"\/Data\/SBS_PADdata"+clientname+".txt");
 }
 
-bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QString id, QByteArray data)
+QString MainWindow::getPadDataBackupFilePath(QString clientname)
 {
-    bool res = true;
-    //mPADDataMute.lock();
+    QString date = QDateTime::currentDateTime().toString("yyyy-MM-dd_hh-mm-ss");
+    return  QString(qApp->applicationDirPath()+"\/Data\/SBS_PADdata"+clientname+"_"+date+".txt");
+}
 
-    //tag[4 byte]+msg[n byte]
-    if( data.length() < 4 ){
-        log(tr("无效的数据包<")+worker->getClienName());
-        worker->sendAck(TcpServerWorker::ACKType::ERROR_DATA);
+
+
+
+//1,change tag to str
+//2,improve the packget head and end tag
+bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QString id, QByteArray msgdata)
+{
+    qint64 tag;
+    bool ok;
+
+    //[tag][#][data]
+    int index = msgdata.indexOf("#");
+
+    tag = QString(msgdata.left(index)).toLongLong(&ok);
+
+    if( ok ){
+        msgdata.remove(0,index+1);
+        pad_tester_data_store(worker,tag,msgdata);
+    }else{
+        log("message error ,tag is not a number !!!");
         return false;
     }
 
-    //get tag
-    int tag = mDataStorer.QByteArrayToInt(data.left(4));
-    //get msg
-    QByteArray msg = data.remove(0,4);
+    return true;
+}
+
+bool MainWindow::pad_tester_data_store(TcpServerWorker *worker, qint64 tag, QByteArray msg)
+{
+    bool res = true;
+    mPADDataMute.lock();
 
     QFileInfo finfo(getPadDataFilePath(worker->getClienName()));
     QByteArray pkg;
     QString myMD5;
+    long padbackupfilesize;
+    QString filelen;
 
     log("get tag="+QString::number(tag));
     switch( tag )
@@ -253,7 +317,19 @@ bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QStrin
     case MainWindow::FILE_SIZE_TAG:
         //ask for data
         pkg = mDataStorer.intToQByteArray(MainWindow::FILE_SIZE_TAG);
-        pkg = pkg + mDataStorer.intToQByteArray((int)finfo.size());
+        //pkg = QString(QString::number(MainWindow::FILE_SIZE_TAG)+"#").toLocal8Bit();
+        padbackupfilesize = QString(msg).toLongLong();
+        if( padbackupfilesize < finfo.size() ){
+            //备份本机的数据
+            if( QFile::rename(getPadDataFilePath(worker->getClienName()), getPadDataBackupFilePath(worker->getClienName())) ){
+                pkg = pkg + mDataStorer.intToQByteArray(0);//QString::number(0).toLocal8Bit();
+            }else{
+                log("重命名pad数据文件失败");
+                pkg = pkg + mDataStorer.intToQByteArray(finfo.size());//QString::number(finfo.size()).toLocal8Bit();
+            }
+        }else{
+            pkg = pkg + mDataStorer.intToQByteArray(finfo.size());//QString::number(finfo.size()).toLocal8Bit();
+        }
         worker->sendBytes(pkg);
         break;
     default:
@@ -281,9 +357,10 @@ bool MainWindow::pad_tester_data_check_and_store(TcpServerWorker *worker, QStrin
         break;
     }
 
-    //mPADDataMute.unlock();
+    mPADDataMute.unlock();
     return res;
 }
+
 
 MainWindow::slot_worker_data_received( TcpServerWorker *worker,QByteArray buffer)
 {
@@ -302,6 +379,8 @@ MainWindow::slot_worker_data_received( TcpServerWorker *worker,QByteArray buffer
     }else if( worker->mClientType == TcpServerWorker::ClientType::PADTESTER ){
         pad_tester_data_check_and_store(worker,worker->mClientID,buffer);
     }else if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_TC){
+        pc_tester_data_check_and_store(worker, worker->mClientID,buffer) ;
+    }else if( worker->mClientType == TcpServerWorker::ClientType::PCTESTER_ADJUST){
         pc_tester_data_check_and_store(worker, worker->mClientID,buffer) ;
     }else{
         log(tr("客户端类型有错"));
@@ -341,3 +420,280 @@ void MainWindow::on_serverOnOFFButton_clicked()
         }
     }
 }
+
+void MainWindow::on_mergepushButton_clicked()
+{
+    QString filename = qApp->applicationDirPath()+"/Data/SBS_Data_"+QDateTime::currentDateTime().toString("yyyy-MM-dd_hh-mm-ss")+".xlsx";
+    filename =QDir::toNativeSeparators(filename );
+
+    if( mExcel.IsOpen() ) mExcel.Close();
+
+
+    srand((int)QDateTime::currentMSecsSinceEpoch());
+    int len = rand()% MAX_PACKET_SIZE;
+    len = len>1 ? len:1;
+
+    QByteArray ddd;
+    for( int i=0 ;i<len; i++){
+        ddd.append(rand()%0xff);
+    }
+    ddd[len/2] = 0xAC;
+
+    QByteArray f,b;
+    SerialCoder coder;
+    b = coder.encode(ddd.data(),ddd.size(),true);
+    for( int i=0; i< b.size(); i++){
+        f = coder.parse(b.at(i),true);
+    }
+
+    bool ok = true;
+    if( f.size() == len){
+    for( int i=0 ;i<len; i++){
+
+        if( ddd.at(i) != f.at(i)){
+            ok = false;
+        }
+    }
+    }else{
+        ok = false;
+    }
+    if( ok ){
+        log(ok?"OK!!":"false");
+    }else{
+        qDebug()<<"DDD:\n"<<ddd<<"\n";
+        qDebug()<<"BBB:\n"<<b<<"\n";
+        qDebug()<<"FFF:\n"<<f<<"\n";
+    }
+    return;
+
+
+
+    log(tr("初始化Excel..."));
+    if(!mExcel.Open(filename,1,false)){
+        QMessageBox::warning(this,"Warning",tr("打开Excel文档失败"));
+        return;
+    }
+
+    //set title
+    if( mExcel.SetCellData(1, 1, "Serialnumber") &&
+            mExcel.SetCellData(1, 2, "MAC") &&
+            mExcel.SetCellData(1, 3, "TempComp") &&
+            mExcel.SetCellData(1, 4, "Calibration") &&
+            mExcel.SetCellData(1, 5, "Loadcellzero") &&
+            mExcel.SetCellData(1, 6, "UID") &&
+            mExcel.SetCellData(1, 7, "LeftGap") &&
+            mExcel.SetCellData(1, 8, "RightGap") &&
+            mExcel.SetCellData(1, 9, "LeftGap(before TC)") &&
+            mExcel.SetCellData(1, 10, "RightGap(before TC)")){
+
+            log("Excel file setup OK, start fill data...");
+    }else{
+        QMessageBox::warning(this,"Error",tr("Excel文档添加Title失败"));
+        return;
+    }
+
+    // 先填Gap_befor_TC
+    log(tr("开始读温补前的数据..."));
+    QFile gapFile ;
+    gapFile.setFileName(mDataStorer.getPCDataFile());
+    QMap <QString,qint64> gapExcelMap;
+    QString line;
+    qint64 currentLine = 0;
+    DataStorer::PcData gapData;
+    qint64 excelLinenumber = 1;
+    if( !gapFile.open(QFile::ReadOnly|QFile::Text)){
+        QMessageBox::warning(this,"Error",tr("打开温补前的Gap数据文件失败"));
+        return;
+    }
+    gapExcelMap.clear();
+    while(true){
+       line = QString(gapFile.readLine(100));
+       if( line.length() <= 1) break;
+
+       currentLine++;
+       if( !mDataStorer.MsgToPcData(line,gapData) ){
+           if( QMessageBox::Yes == QMessageBox::warning(this,"Warn",tr("解释错误，是否忽略此温补前Gap数据：行")+QString::number(currentLine),QMessageBox::Yes,QMessageBox::No))
+           {
+                continue;
+           }else{
+               gapFile.close();
+                return;
+           }
+       }
+       if( gapExcelMap.contains(gapData.barcode) ){
+           if( QMessageBox::No == QMessageBox::warning(this,"Warn",tr("有重复的温补前Gap数据，是否覆盖？"),QMessageBox::Yes,QMessageBox::No))
+           {
+                continue;
+           }
+       }
+
+       excelLinenumber++;
+       gapExcelMap.insert(gapData.barcode,excelLinenumber);
+       if( ! mExcel.SetCellData(excelLinenumber, 1, gapData.barcode) ||
+               !mExcel.SetCellData(excelLinenumber, 9, gapData.leftInteval) ||
+               !mExcel.SetCellData(excelLinenumber, 10, gapData.rightInterval)){
+           QMessageBox::warning(this,"Error",tr("Excel写入温补前Gap数据失败"));
+           gapFile.close();
+           return;
+       }
+    }
+    gapFile.close();
+
+
+    // gap after tc
+    log(tr("开始读温补后的数据..."));
+    QFile gapTCFile;
+    gapTCFile.setFileName(mTCDataStorer.getPCDataFile());
+    currentLine = 0;
+    if( !gapTCFile.open(QFile::ReadOnly|QFile::Text)){
+        QMessageBox::warning(this,"Error",tr("打开温补后的Gap数据文件失败"));
+        return;
+    }
+    while(true){
+       line = QString(gapTCFile.readLine(100));
+       if( line.length() <= 1) break;
+
+       currentLine++;
+       if( !mDataStorer.MsgToPcData(line,gapData) ){
+           if( QMessageBox::Yes == QMessageBox::warning(this,"Warn",tr("解释错误，是否忽略此温补前Gap数据：行")+QString::number(currentLine),QMessageBox::Yes,QMessageBox::No))
+           {
+                continue;
+           }else{
+               gapTCFile.close();
+                return;
+           }
+       }
+       if( !gapExcelMap.contains(gapData.barcode) ){
+           excelLinenumber++;
+           gapExcelMap.insert(gapData.barcode,excelLinenumber);
+           if( ! mExcel.SetCellData(excelLinenumber, 1, gapData.barcode) ||
+                   !mExcel.SetCellData(excelLinenumber, 7, gapData.leftInteval) ||
+                   !mExcel.SetCellData(excelLinenumber, 8, gapData.rightInterval)){
+               QMessageBox::warning(this,"Error",tr("Excel添加温补后Gap数据失败"));
+               gapTCFile.close();
+               return;
+           }
+       }else{
+           qint64 row = gapExcelMap.value(gapData.barcode);
+           if(     !mExcel.SetCellData(row, 7, gapData.leftInteval) ||
+                   !mExcel.SetCellData(row, 8, gapData.rightInterval)){
+               QMessageBox::warning(this,"Error",tr("Excel写入温补后Gap数据失败"));
+               gapTCFile.close();
+               return;
+           }
+       }
+    }
+
+
+
+    //fill pad data
+    log(tr("开始读检校数据..."));
+    QDir fromDir = qApp->applicationDirPath()+"\/Data";
+    QStringList filters;
+    filters.append("SBS_PADdata*.txt");
+    QFileInfoList fileInfoList = fromDir.entryInfoList(filters, QDir::AllDirs|QDir::Files);
+    QStringList padDataFileList;
+    foreach(QFileInfo fileInfo, fileInfoList)
+    {
+        if (fileInfo.fileName() == "." || fileInfo.fileName() == "..")
+           continue;
+        if (!fileInfo.isDir())
+        {
+            padDataFileList.append(fileInfo.absoluteFilePath());
+            //fileNameList.append(fileInfo.fileName());
+        }
+    }
+
+    DataStorer::PadData paddata;
+    foreach(QString padDataFilepath, padDataFileList)
+    {
+        QFile padDataFile ;
+        padDataFile.setFileName(padDataFilepath);
+        if( !padDataFile.open(QFile::ReadOnly)){
+            QMessageBox::warning(this,"Error",tr("打开校检数据文件失败:")+QFileInfo(padDataFile).fileName());
+            return;
+        }
+        log(QFileInfo(padDataFile).fileName()+"...");
+        currentLine=0;
+        while( true )
+        {
+            line = QString(padDataFile.readLine(200));
+            if( line.length() <= 1) break;
+            currentLine++;
+            //ignore the title
+            if( line.left(6) == "Device") continue;
+
+            if( !mDataStorer.MsgToPadData(line,paddata) ){
+                if( QMessageBox::Yes == QMessageBox::warning(this,"Warn",tr("是否忽略  ")+QFileInfo(padDataFile).fileName()+tr("解释错误:行")+QString::number(currentLine),QMessageBox::Yes,QMessageBox::No))
+                {
+                     continue;
+                }else{
+                    padDataFile.close();
+                     return;
+                }
+            }
+
+            if( !gapExcelMap.contains(paddata.barcode) ){
+                excelLinenumber++;
+                gapExcelMap.insert(paddata.barcode,excelLinenumber);
+                if( ! mExcel.SetCellData(excelLinenumber, 1, paddata.barcode) ||
+                        !mExcel.SetCellData(excelLinenumber, 2, paddata.mac) ||
+                        !mExcel.SetCellData(excelLinenumber, 3, paddata.temp_comp) ||
+                        !mExcel.SetCellData(excelLinenumber, 4, paddata.Cali_ADC) ||
+                        !mExcel.SetCellData(excelLinenumber, 5, paddata.Loadcellzero) ||
+                        !mExcel.SetCellData(excelLinenumber, 6, paddata.UID)){
+                    QMessageBox::warning(this,"Error",tr("Excel添加校检数据失败"));
+                    padDataFile.close();
+                    return;
+                }
+            }else{
+
+                qint64 row = gapExcelMap.value(paddata.barcode);
+                if( ! mExcel.GetCellData(row,2).isNull() ){
+                    if( QMessageBox::No ==  QMessageBox::warning(this,"Error",QFileInfo(padDataFile).fileName()+":\n"+paddata.barcode+tr("序列号重复,行")+QString::number(currentLine)+tr("序列号重复,覆盖？"), QMessageBox::Yes,QMessageBox::No))
+                    {
+                        log(tr("合并数据失败，退出"));
+                        return;
+                    }
+                    //recovery
+                }
+                if( !mExcel.SetCellData(row, 2, paddata.mac) ||
+                        !mExcel.SetCellData(row, 3, paddata.temp_comp) ||
+                        !mExcel.SetCellData(row, 4, paddata.Cali_ADC) ||
+                        !mExcel.SetCellData(row, 5, paddata.Loadcellzero) ||
+                        !mExcel.SetCellData(row, 6, paddata.UID)){
+                    QMessageBox::warning(this,"Error",tr("Excel写入校检数据失败"));
+                    padDataFile.close();
+                    return;
+                }
+            }
+        }
+        padDataFile.close();
+    }
+
+    log(tr("保存文件：")+mExcel.getFilePath());
+
+    mExcel.Save();
+    mExcel.Close();
+
+    log(tr("完成，退出Excel"));
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

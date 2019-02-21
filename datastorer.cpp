@@ -57,7 +57,8 @@ bool DataStorer::MsgToPadData(QString msg, PadData &pdata)
 
     //msg.remove("\n");
     data = msg.split(QRegExp("\\s+"),QString::SkipEmptyParts);
-    if( data.count() != 5 )
+    qDebug()<<data;
+    if( data.count() != 6 )
         return false;
 
     //check barcode
@@ -65,22 +66,29 @@ bool DataStorer::MsgToPadData(QString msg, PadData &pdata)
     if( value.length() != 16) return false;
     //check
     value = data.at(1);
+    if( value.length() != 17) return false;
+
+/*
+    //check
+    value = data.at(2);
     if( value.length() != 2) return false;
     //check
-    value = data.at(1);
+    value = data.at(3);
     if( value.length() != 2) return false;
     //check
-    value = data.at(1);
+    value = data.at(4);
     if( value.length() != 2) return false;
     //check
-    value = data.at(1);
+    value = data.at(5);
     if( value.length() != 2) return false;
+ */
 
     pdata.barcode = data.at(0);
     pdata.mac =     data.at(1);
     pdata.temp_comp = data.at(2);
     pdata.Cali_ADC = data.at(3);
-    pdata.UID =     data.at(4);
+    pdata.Loadcellzero = data.at(4);
+    pdata.UID =     data.at(5);
 
 
     return true;

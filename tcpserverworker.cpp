@@ -1,12 +1,14 @@
 #include "tcpserverworker.h"
 
 TcpServerWorker::TcpServerWorker(QObject *parent) :
-    QObject(parent)
+    QObject(parent),
+    mCoder()
 {
     mClientType = TcpServerWorker::ClientType::UNKNOW;
     mClientID = "";
     mSocket = NULL;
     mLastMsg = "";
+    mCoder.clear();
 }
 
 TcpServerWorker::~TcpServerWorker()
@@ -53,26 +55,42 @@ void TcpServerWorker::closeSocket()
 
 }
 
-TcpServerWorker::sendBytes(QByteArray data)
+TcpServerWorker::sendRawBytes(QByteArray data)
 {
     if( mSocket != NULL)
         mSocket->write(data);
 }
 
+TcpServerWorker::sendBytes(QByteArray data)
+{
+    if( mSocket != NULL){
+        mSocket->write(mCoder.encode(data.data(),data.length(),true));
+    }
+}
+
 TcpServerWorker::sendAck(enum ACKType res)
 {
-    if( mSocket != NULL)
-        mSocket->write(QString("ACK"+QString::number(res)).toLocal8Bit());
+    sendBytes(QString("ACK"+QString::number(res)).toLocal8Bit());
 }
 
 void TcpServerWorker::slot_socket_data_received()
 {
     QByteArray buffer;
+    QByteArray pkg;
+    bool error;
 
     buffer = mSocket->readAll();
-    if( buffer.isEmpty() ) return ;
-
-    emit singal_data_received(this, buffer);
+    for( int i=0; i< buffer.length(); i++)
+    {
+        pkg = mCoder.parse(buffer.at(i),true,&error);
+        if( error ){
+            qDebug()<<("slot_worker_data_received: Coder parse error!!");
+        }else{
+            if( pkg.length() > 0 ){
+                emit singal_data_received(this, pkg);
+            }
+        }
+    }
 }
 
 void TcpServerWorker::slot_socket_disconnect()

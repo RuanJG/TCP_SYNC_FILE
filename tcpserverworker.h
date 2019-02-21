@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QTcpSocket>
+#include <serialcoder.h>
 
 class TcpServerWorker : public QObject
 {
@@ -16,11 +17,14 @@ public:
     int mClientType;
     QTcpSocket *mSocket;
     QString mLastMsg;
+    SerialCoder mCoder;
     enum ClientType {
         UNKNOW = 1,
         PCTESTER = 2,
         PADTESTER = 3,
-        PCTESTER_TC = 4   // 做过温保后的测试
+        PCTESTER_TC = 4,   // 做过温保后的测试
+        PCTESTER_ADJUST = 5,
+        TYPE_MAX
     };
     enum ACKType {
         OK = 0,
@@ -35,6 +39,7 @@ public:
     log(QString str);
     QString getClienName();
     sendBytes(QByteArray data);
+    sendRawBytes(QByteArray data);
 signals:
     void singal_data_received(TcpServerWorker *worker, QByteArray data);
     void singal_socket_abort(TcpServerWorker *worker);
