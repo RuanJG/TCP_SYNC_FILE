@@ -32,14 +32,14 @@ public class TcpFileSyncer {
     private volatile boolean mTcpForceReconnect = false;
     private DataInputStream mDataInputStream = null;
     private String mSaveFileName = "Sleeve_App_BLE_Data/SBS_MP_Data.txt";//“内部存储”目录下的路径
-    private SerialCoder mCoder;
+    private SerialCoder mCoder = new SerialCoder();
 
     public String mId = "5";  // difference pad use ID0 , ID1 , ID2 ...
     public String mType = "TYPE3"; // fixed
     public String mIP = "127.0.0.1";
     public int mPort = 55555;
 
-    int fileFrameSize = 500;
+    int fileFrameSize = 256;
 
     final int MD5_CODE_TAG = -1;
     final int FILE_SIZE_TAG = -2;
@@ -244,8 +244,10 @@ public class TcpFileSyncer {
         System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
         System.arraycopy(md5str.getBytes(), 0 , msg, tagbytes.length, md5str.length());
         sendTcpBytes(msg);
-        if( listenAck(3000) )
+        if( listenAck(3000) ) {
+            //threadLog("Sync OK");
             return;//same md5, don't need to sync
+        }
 
         //get file size
         //tagbytes = intToQByteArray(FILE_SIZE_TAG);
@@ -257,7 +259,7 @@ public class TcpFileSyncer {
         System.arraycopy(sizeStr.getBytes(), 0 , msg, tagbytes.length, sizeStr.length());
         sendTcpBytes(msg);
         byte[] filesizebyte = listenTcpOneMsg(5000);
-        int serverFileSize =0;
+        long serverFileSize =0;
 
         if( filesizebyte.length == 8 ){
             int t = QByteArrayToInt( getSubByte(filesizebyte,0,4) );
@@ -279,16 +281,18 @@ public class TcpFileSyncer {
         }
 
         // sync file
-        int totalLen = (int) getFileSize(mContext, mSaveFileName);
-        int currentPos = serverFileSize<totalLen ? serverFileSize:0;
+        long totalLen = (int) getFileSize(mContext, mSaveFileName);
+        long currentPos = serverFileSize<totalLen ? serverFileSize:0;
 
 
         if( currentPos == 0 )threadLog("Start sync file ....\n");
         else threadLog("Appending data ....\n");
 
+        byte[] fdata;
         while(true)
         {
-            byte[] fdata = readExternalFileBytes(mContext, mSaveFileName,currentPos,fileFrameSize);
+            threadLog(String.valueOf(currentPos)+"/"+String.valueOf(totalLen)+" = "+ 100*currentPos/totalLen + "%\n");
+            fdata = readExternalFileBytes(mContext, mSaveFileName,currentPos,fileFrameSize);
             if( fdata.length > 0){
                 //tagbytes = intToQByteArray(currentPos);
                 tagStr = String.valueOf(currentPos)+"#";
@@ -309,31 +313,35 @@ public class TcpFileSyncer {
             }
         }
 
-        //send md5
-        //Log.e("Ruan","MD5="+md5str);
-        tagbytes = intToQByteArray(MD5_CODE_TAG);
+        //recheck md5
+        md5str = getExternalFileMD5(mContext, mSaveFileName);
+        //byte[] tagbytes = intToQByteArray(MD5_CODE_TAG);
+        tagStr = String.valueOf(MD5_CODE_TAG)+"#";
+        tagbytes =tagStr.getBytes();
         msg = new byte[md5str.length()+tagbytes.length];
         System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
         System.arraycopy(md5str.getBytes(), 0 , msg, tagbytes.length, md5str.length());
         sendTcpBytes(msg);
-        if(  listenAck(3000) ) {
-            threadLog("Sync Data successfully\n");
-            return;
+        if( listenAck(3000) ) {
+            threadLog("Sync OK");
+        }else{
+            threadLog("Sync false");
         }
-        threadLog("Sync Data False：different MD5.\n");
     }
 
 
     private boolean listenAck(int timeoutMs)
     {
         byte[] res = listenTcpOneMsg(timeoutMs);
-        if ( res.length <= 0 ) return false;
-        try {
-            String restr = new String( res, "utf-8");
-            Log.e("Ruan","ACK="+restr);
-            if( restr.equals("ACK0") )
-                return true;
-        }catch (Exception e) {
+        if ( res.length > 0 )
+        {
+            try {
+                String restr = new String(res, "utf-8");
+                Log.e("Ruan", "ACK=" + restr);
+                if (restr.equals("ACK0"))
+                    return true;
+            } catch (Exception e) {
+            }
         }
         return false;
     }
@@ -458,7 +466,7 @@ public class TcpFileSyncer {
         return 0;
     }
 
-    private  byte[] readExternalFileBytes(Context context, String filename, int pos , int length)
+    private  byte[] readExternalFileBytes(Context context, String filename, long pos , int length)
     {
         try
         {

@@ -7,16 +7,16 @@ import android.util.Log;
  */
 
 public class SerialCoder {
-    public static final byte PACKET_START     = (byte)    0xAC;
+    public static final byte PACKET_START     = (byte) 0xAC;
     public static final byte PACKET_END         = (byte)  0xAD;
     public static final byte PACKET_ESCAPE       = (byte) 0xAE;
     public static final byte PACKET_ESCAPE_MASK  = (byte) 0x80;
-    public static final int  MAX_PACKET_SIZE     = (byte) (1024);
+    public static final int  MAX_PACKET_SIZE     = (1024);
 
-    private  byte[]mPackget = new byte[MAX_PACKET_SIZE+1];
-    private  int mLength = 0;
-    private boolean mStartTag;
-    private boolean mEscTag;
+    private  volatile byte[]mPackget = new byte[MAX_PACKET_SIZE+1];
+    private  volatile int mLength = 0;
+    private volatile boolean mStartTag;
+    private volatile boolean mEscTag;
 
     SerialCoder()
     {
@@ -33,14 +33,17 @@ public class SerialCoder {
 
     byte[] parse(byte pData ,boolean withCRC)
     {
+        //log("0x"+Integer.toHexString(pData&0xff));
         byte[] pack = new byte[0];
 
         if( pData == PACKET_START )
         {
+            //log("get start");
             mStartTag = true;
             mEscTag = false;
             if( mLength > 0){
                 mLength=0;
+                log("delete some unuseful data");
             }
             return pack;
         }
@@ -48,6 +51,7 @@ public class SerialCoder {
 
         if ( pData == PACKET_END )
         {
+            //log("get end");
             if( ((withCRC && mLength>1) || (!withCRC && mLength>0))  && mStartTag && !mEscTag){
                 if( withCRC ) {
                     byte crc = crc8(mPackget ,mLength-1);
@@ -76,12 +80,14 @@ public class SerialCoder {
                     pData ^= PACKET_ESCAPE_MASK;
                     mEscTag = false;
                 }
+                //log("get data");
                 mPackget[mLength]=(pData);
                 mLength++;
                 if( mLength > MAX_PACKET_SIZE){
                     mStartTag = false;
                     mEscTag = false;
                     mLength=0;
+                    log("SerialCoder : error packget too big");
                 }
             }
         }
@@ -131,19 +137,19 @@ public class SerialCoder {
     byte crc8(byte[] data, int size) {
         int i = 0;
         int j = 0;
-        byte crc = 0;
+        int crc = 0;
 
         for (i = 0; i < size; ++i) {
-            crc = (byte) ( crc ^ data[i]);
+            crc = 0xff & ( crc ^ data[i]);
             for (j = 0; j < 8; ++j) {
                 if ((crc & 0x01) != 0) {
-                    crc = (byte)((crc >> 1) ^ 0x8C);
+                    crc = 0xff & ((crc >> 1) ^ 0x8C);
                 } else {
                     crc >>= 1;
                 }
             }
         }
-        return crc;
+        return (byte)crc;
     }
 
     void log(String str)
