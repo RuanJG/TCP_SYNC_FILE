@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
 
             String notify = msg.getData().getString("notify");
             if( notify.length() > 0 ){
-                notifyUser("同步文件", notify);
+                notifyUser("Sync File:", notify);
             }
         }
     };
@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
             public void onClick(View view) {
                 if( !mPwdEditStatus ){
                     mPwdEditStatus = true;
-                    setPwdButton.setText("确定");
+                    setPwdButton.setText("OK");
                     return;
                 }
 
@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
                 mIintent.setComponent(new ComponentName("com.rompa.jk.tcpfilesyncer","com.rompa.jk.tcpfilesyncer.SBSFileSyncService"));
                 mContext.startService(mIintent);
 
-                setPwdButton.setText("修改密码");
+                setPwdButton.setText("Modify");
                 mPwdEditStatus = false;
             }
         });
@@ -237,7 +237,7 @@ public class MainActivity extends Activity {
         pwdTextEdit.setEnabled(true);
         setPwdButton.setEnabled(true);
         setSettingButton.setEnabled(true);
-        setPwdButton.setText("修改密码");
+        setPwdButton.setText("Modify");
 
         mUserLogined = true;
     }

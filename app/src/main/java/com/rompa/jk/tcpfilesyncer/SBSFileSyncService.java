@@ -5,10 +5,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Binder;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.util.Log;
+
+import java.io.File;
+import java.io.FileOutputStream;
 
 /**
  * Created by RSL-030 on 2018/11/8.
@@ -23,6 +27,7 @@ public class SBSFileSyncService extends Service {
     private String mID;
     private TcpFileSyncer mTcpSyncer;
     private String SBS_DATA_FILENAME =  "Sleeve_App_BLE_Data/SBS_MP_Data.txt";//“内部存储”目录下的路径
+    private String SBS_DATA_Backup_FILENAME = "SBSFileSyncer/SBS_MP_Raw_Data.txt" ;// 备份目录
 
     class SyncServiceBinder extends Binder
     {
@@ -100,6 +105,8 @@ public class SBSFileSyncService extends Service {
             }
         }else if( cmd.equals("newdata")){
             Log.e("Ruan:","data:"+intent.getStringExtra("data"));
+            String str = intent.getStringExtra("data");
+            writeExternalFileBytes(SBS_DATA_Backup_FILENAME,str.getBytes());
             if( !mTcpSyncer.isTcpConnected() )
                 mTcpSyncer.Login();
             if( mClientListener != null)
@@ -165,6 +172,31 @@ public class SBSFileSyncService extends Service {
         return mPort;
     }
 
+    private  boolean writeExternalFileBytes(String filename, byte[] bytes)
+    {
+        try
+        {
+            if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED))
+            {
+                String fpath = Environment.getExternalStorageDirectory().getPath()+ File.separator + filename;//"/Sleeve_App_BLE_Data" + "/" + "SBS_MP_Data" + ".txt";
+                //fpath = context.getExternalCacheDir().getAbsolutePath() + File.separator + filename;
+
+                //打开文件输入流
+                FileOutputStream outputStream =  openFileOutput(fpath, Context.MODE_APPEND); //new FileOutputStream(fpath);
+                //outputStream.getChannel().position(pos);
+                outputStream.write(bytes);
+                outputStream.flush();
+                outputStream.close();
+                return true;
+            }
+            Log.e("Ruan","Could not get External Storage");
+            return false;
+        }catch (Exception e) {
+            Log.e("Ruan","error in read file");
+            e.printStackTrace();
+            return false;
+        }
+    }
 
 
 }

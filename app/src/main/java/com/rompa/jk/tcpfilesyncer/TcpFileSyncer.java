@@ -9,8 +9,10 @@ import android.util.Log;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
@@ -30,11 +32,14 @@ public class TcpFileSyncer {
     private volatile boolean mTcpForceReconnect = false;
     private DataInputStream mDataInputStream = null;
     private String mSaveFileName = "Sleeve_App_BLE_Data/SBS_MP_Data.txt";//“内部存储”目录下的路径
+    private SerialCoder mCoder;
 
     public String mId = "5";  // difference pad use ID0 , ID1 , ID2 ...
     public String mType = "TYPE3"; // fixed
     public String mIP = "127.0.0.1";
     public int mPort = 55555;
+
+    int fileFrameSize = 500;
 
     final int MD5_CODE_TAG = -1;
     final int FILE_SIZE_TAG = -2;
@@ -91,6 +96,7 @@ public class TcpFileSyncer {
         mTcpForceReconnect = false;
         mTcpThreader = new Thread(tcpThreadRunner);
         mTcpThreader.start();
+        mCoder.clear();
     }
 
     private  void stopTcpThread() {
@@ -156,7 +162,19 @@ public class TcpFileSyncer {
         try {
             threadLog("try to connect "+mIP+":"+mPort+"\n");
             mSocket = new Socket();
-            SocketAddress socAddress = new InetSocketAddress(mIP, mPort);
+            SocketAddress socAddress;
+            InetAddress ia = InetAddress.getByName(mIP);
+            socAddress = new InetSocketAddress(ia.getHostAddress(), mPort);
+//            ia.isAnyLocalAddress()
+//            if( ia.getHostAddress().equals(mIP) ){
+//                //mIP is ip addresss
+//                threadLog("is ip address\n"+ia.getHostAddress());
+//                 socAddress = new InetSocketAddress(mIP, mPort);
+//            }else{
+//                //mIP is hostname
+//                threadLog("is hostname\n"+ia.getHostAddress());
+//                 socAddress = new InetSocketAddress(ia, mPort);
+//            }
             mSocket.connect(socAddress, 2000);//block until timeout, if false will catch exception
             if( mSocket.isConnected()) {
                 threadLog("connected!!\n");
@@ -215,60 +233,72 @@ public class TcpFileSyncer {
 
     private void syncLoop( )
     {
+        //msg = [tag][#][data]
         //send md5
         String md5str = getExternalFileMD5(mContext, mSaveFileName);
         Log.e("Ruan","MD5="+md5str);
-        byte[] tagbytes = intToQByteArray(MD5_CODE_TAG);
+        //byte[] tagbytes = intToQByteArray(MD5_CODE_TAG);
+        String tagStr = String.valueOf(MD5_CODE_TAG)+"#";
+        byte[] tagbytes =tagStr.getBytes();
         byte[] msg = new byte[md5str.length()+tagbytes.length];
         System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
         System.arraycopy(md5str.getBytes(), 0 , msg, tagbytes.length, md5str.length());
         sendTcpBytes(msg);
-        if( listenAck(1000) )
-            return;
+        if( listenAck(3000) )
+            return;//same md5, don't need to sync
 
         //get file size
-        tagbytes = intToQByteArray(FILE_SIZE_TAG);
-        sendTcpBytes(tagbytes);
-        byte[] filesizebyte = listenTcpBytes(8, 2000);
+        //tagbytes = intToQByteArray(FILE_SIZE_TAG);
+        tagStr = String.valueOf(FILE_SIZE_TAG)+"#";
+        tagbytes = tagStr.getBytes();
+        String sizeStr = String.valueOf(getFileSize(mContext, mSaveFileName));
+        msg = new byte[sizeStr.length()+tagbytes.length];
+        System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
+        System.arraycopy(sizeStr.getBytes(), 0 , msg, tagbytes.length, sizeStr.length());
+        sendTcpBytes(msg);
+        byte[] filesizebyte = listenTcpOneMsg(5000);
         int serverFileSize =0;
 
         if( filesizebyte.length == 8 ){
             int t = QByteArrayToInt( getSubByte(filesizebyte,0,4) );
             serverFileSize = QByteArrayToInt( getSubByte(filesizebyte,4,4) );
             if( t != FILE_SIZE_TAG ){
-                threadLog("同步文件失败：unknow filesize \n");
+                threadLog("Sync Data False：get service file size false 1 \n");
                 return;
             }
             if( serverFileSize > getFileSize(mContext, mSaveFileName)){
-                threadLog("同步文件失败：先备份服务器上的数据文件 !!!!\n");
-                threadNotify("同步文件失败：先备份服务器上的数据文件 !!!!");
+                threadLog("Sync Data False：To backup the data file in the Service first !!!!\n");
+                threadNotify("Sync Data False：To backup the data file in the Service first !!!!");
                 //mTcpThreadStop = true;
                 return;
             }
+            //goto sync file
         }else{
-            threadLog("同步文件失败：unknow filesize msg\n");
+            threadLog("Sync Data False：get service file size false 2\n");
             return;
         }
 
         // sync file
         int totalLen = (int) getFileSize(mContext, mSaveFileName);
-        int currentPos = serverFileSize<getFileSize(mContext, mSaveFileName) ? serverFileSize:0;
-        int frameLen = 5;
+        int currentPos = serverFileSize<totalLen ? serverFileSize:0;
 
-        if( currentPos == 0 )threadLog("开始覆盖数据....\n");
-        else threadLog("开始添加数据....\n");
+
+        if( currentPos == 0 )threadLog("Start sync file ....\n");
+        else threadLog("Appending data ....\n");
 
         while(true)
         {
-            byte[] fdata = readExternalFileBytes(mContext, mSaveFileName,currentPos,frameLen);
+            byte[] fdata = readExternalFileBytes(mContext, mSaveFileName,currentPos,fileFrameSize);
             if( fdata.length > 0){
-                tagbytes = intToQByteArray(currentPos);
+                //tagbytes = intToQByteArray(currentPos);
+                tagStr = String.valueOf(currentPos)+"#";
+                tagbytes = tagStr.getBytes();
                 msg = new byte[tagbytes.length+fdata.length];
                 System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
                 System.arraycopy(fdata, 0 , msg, tagbytes.length, fdata.length);
                 sendTcpBytes(msg);
-                if(  ! listenAck(1000) ) {
-                    threadLog("同步文件失败：数据包掉失\n");
+                if(  ! listenAck(3000) ) {
+                    threadLog("Sync Data False：Ack timeout\n");
                     return;
                 }
                 currentPos += fdata.length;
@@ -286,17 +316,18 @@ public class TcpFileSyncer {
         System.arraycopy(tagbytes,0, msg,0, tagbytes.length);
         System.arraycopy(md5str.getBytes(), 0 , msg, tagbytes.length, md5str.length());
         sendTcpBytes(msg);
-        if(  listenAck(1000) ) {
-            threadLog("同步文件成功\n");
+        if(  listenAck(3000) ) {
+            threadLog("Sync Data successfully\n");
             return;
         }
-        threadLog("同步文件失败：different MD5.\n");
+        threadLog("Sync Data False：different MD5.\n");
     }
 
 
     private boolean listenAck(int timeoutMs)
     {
-        byte[] res = listenTcpBytes(4, timeoutMs);
+        byte[] res = listenTcpOneMsg(timeoutMs);
+        if ( res.length <= 0 ) return false;
         try {
             String restr = new String( res, "utf-8");
             Log.e("Ruan","ACK="+restr);
@@ -307,6 +338,40 @@ public class TcpFileSyncer {
         return false;
     }
 
+    private byte[] listenTcpOneMsg(int timeoutMs)
+    {
+        byte[] retByte = new byte[1] ;
+        byte[] pkg;
+        int len,ms=0;
+        try {
+            while(true)
+            {
+                len = mDataInputStream.available();
+                if( len > 0 )
+                {
+                    for( int i=0; i< len ; i++)
+                    {
+                        mDataInputStream.read(retByte, 0, 1);
+                        pkg  = mCoder.parse(retByte[0],true);
+                        if ( pkg.length > 0){
+                            return pkg;
+                        }
+                    }
+                }
+                Thread.sleep(1);
+                ms++;
+                if( timeoutMs <= ms ) {
+                    threadLog("Receive Timeout!!\n");
+                    break;
+                }
+            }
+        }catch (Exception e) {
+            // TODO: handle exception
+            Log.e("Ruan:", e.toString());
+        }
+        return new byte[0];
+    }
+
     private byte[] listenTcpBytes(int replyPkgLen, int timeoutMs)
     {
         byte[] retByte = new byte[replyPkgLen];
@@ -315,22 +380,7 @@ public class TcpFileSyncer {
         try {
             while(true)
             {
-                //mDataInputStream = new DataInputStream(mSocket.getInputStream());
                 len = mDataInputStream.available();
-                //Log.e("Ruan","valid len="+len);
-                /*
-                if( len > 0 ) {
-                    recData = new byte[len];
-                    mDataInputStream.read(recData);
-                    cpcount = replyPkgLen - index;
-                    cpcount = cpcount < len ? cpcount : len;
-                    System.arraycopy(recData, 0, retByte, index, cpcount);
-                    index += cpcount;
-                    if (index == replyPkgLen) {
-                        //Log.e("Ruan","len="+len+",data="+retByte);
-                        return retByte;
-                    }
-                }*/
                 if( len >= replyPkgLen){
                     mDataInputStream.read(retByte);
                     //Log.e("Ruan","len="+len);
@@ -352,13 +402,16 @@ public class TcpFileSyncer {
 
     private  boolean sendTcpBytes(byte[] data)
     {
+        byte[] pkg;
+
         if( mSocket ==null || !mSocket.isConnected()){
             return false;
         }
         try
         {
+            pkg = mCoder.encode(data,data.length,true);
             OutputStream outputStream = mSocket.getOutputStream();
-            outputStream.write(data);
+            outputStream.write(pkg);
             outputStream.flush();
         }
         catch (Exception e)
@@ -435,6 +488,30 @@ public class TcpFileSyncer {
         return new byte[0];
     }
 
+    private  boolean writeExternalFileBytes(Context context, String filename, int pos, byte[] bytes)
+    {
+        try
+        {
+            if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED))
+            {
+                String fpath = Environment.getExternalStorageDirectory().getPath()+ File.separator + filename;//"/Sleeve_App_BLE_Data" + "/" + "SBS_MP_Data" + ".txt";
+                //fpath = context.getExternalCacheDir().getAbsolutePath() + File.separator + filename;
+
+                //打开文件输入流
+                FileOutputStream outputStream = new FileOutputStream(fpath);
+                outputStream.getChannel().position(pos);
+                outputStream.write(bytes);
+                outputStream.close();
+                return true;
+            }
+            Log.e("Ruan","Could not get External Storage");
+            return false;
+        }catch (Exception e) {
+            Log.e("Ruan","error in read file");
+            e.printStackTrace();
+            return false;
+        }
+    }
 
     private void threadLog(String msg)
     {
