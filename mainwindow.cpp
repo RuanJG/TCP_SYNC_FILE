@@ -71,13 +71,9 @@ MainWindow::MainWindow(QWidget *parent) :
             //QString file = mSetting.value("data/savefile").toString();
             ui->saveDataFilelineEdit->setText(mSetting.value("data/savefile").toString());
         }else{
-            //QString file2 = mSetting.value("data/savefile").toString();
-            QString tc;
-            if( ui->gapBeforTempCailradioButton->isChecked() ) tc = tr("温保前");
-            if( ui->GapafterTemptureCailradioButton_2->isChecked() ) tc = tr("温保后");
-            if( ui->adjustRadioButton->isChecked() ) tc = tr("调整后");
-            QString file = qApp->applicationDirPath()+"\/SBSdata"+tc+".txt";
-            ui->saveDataFilelineEdit->setText(file);
+            if( ui->gapBeforTempCailradioButton->isChecked() ) on_gapBeforTempCailradioButton_clicked();
+            if( ui->GapafterTemptureCailradioButton_2->isChecked() ) on_GapafterTemptureCailradioButton_2_clicked();
+            if( ui->adjustRadioButton->isChecked() ) on_adjustRadioButton_clicked();
         }
         ui->saveDataFilelineEdit->setReadOnly(true);
     }else{
