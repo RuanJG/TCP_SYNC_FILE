@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/SBSFileSyncer.iml" filepath="$PROJECT_DIR$/SBSFileSyncer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/RRCWareHouseScaner.iml" filepath="$PROJECT_DIR$/RRCWareHouseScaner.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>
