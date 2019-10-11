@@ -14,11 +14,14 @@ import android.os.Handler;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
-import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+
+import com.uuzuche.lib_zxing.activity.CaptureActivity;
+import com.uuzuche.lib_zxing.activity.CodeUtils;
+import com.uuzuche.lib_zxing.activity.ZXingLibrary;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,6 +35,7 @@ public class MainActivity extends Activity {
     private  EditText console;
     private Button setSettingButton;
     private Button exportButton;
+    private Button scanButton;
     private EditText POEditText;
     private EditText BoxEditText;
     private TextView BoxCounter;
@@ -46,6 +50,8 @@ public class MainActivity extends Activity {
     private boolean startedRecord = false;
     private int recordSeq = 1;
 
+    private final int SCAN_REQUEST_CODE = 0xff;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -59,6 +65,7 @@ public class MainActivity extends Activity {
         setSettingButton = (Button) this.findViewById(R.id.setSettingbutton);
         BoxCounter = (TextView) this.findViewById(R.id.BoxCounttextView3);
         exportButton = (Button) this.findViewById(R.id.exportButton);
+        scanButton = (Button) this.findViewById(R.id.scanbutton2);
 
         console.setEnabled(false);
         recordSeq = 1;
@@ -193,14 +200,19 @@ public class MainActivity extends Activity {
             }
         });
 
-        BoxEditText.setOnKeyListener(new View.OnKeyListener() {
+
+
+        ZXingLibrary.initDisplayOpinion(this);
+        scanButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public boolean onKey(View v, int keyCode, KeyEvent event) {
-                //Log.e("Ruan","key up: "+event.toString());
-                return false;
+            public void onClick(View view) {
+                Intent intent = new Intent(MainActivity.this, CaptureActivity.class);
+                startActivityForResult(intent, SCAN_REQUEST_CODE);
             }
         });
 
+
+        // open the database
         mContext  = this.getApplicationContext();
         String dbFile=getExStorageFilePath(mDataDir,mDataFileName+".db");
         if ( dbFile.length() > 0) {
@@ -211,6 +223,32 @@ public class MainActivity extends Activity {
         }else{
             showMessageBox("手机存储区打开失败!!!");
             mDatabase = null;
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        super.onActivityResult(requestCode, resultCode, intent);
+        switch (requestCode) {
+            case SCAN_REQUEST_CODE:
+                if (resultCode == RESULT_OK) {
+                    if(intent!=null){
+                        //处理扫描结果（在界面上显示）
+                        if (null != intent) {
+                            Bundle bundle = intent.getExtras();
+                            if (bundle == null) {
+                                return;
+                            }
+                            if (bundle.getInt(CodeUtils.RESULT_TYPE) == CodeUtils.RESULT_SUCCESS) {
+                                String result = bundle.getString(CodeUtils.RESULT_STRING);
+                                BoxEditText.setText(result);
+                            } else if (bundle.getInt(CodeUtils.RESULT_TYPE) == CodeUtils.RESULT_FAILED) {
+                                showMessageBox("解析二维码失败");
+                            }
+                        }
+                    }
+                }
+                break;
         }
     }
 
