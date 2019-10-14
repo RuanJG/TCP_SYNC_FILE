@@ -1,6 +1,6 @@
 package com.rompa.jk.tcpfilesyncer;
 
-import android.app.Activity;
+import android.Manifest;
 import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -8,29 +8,37 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import com.uuzuche.lib_zxing.activity.CaptureActivity;
+import com.uuzuche.lib_zxing.activity.CaptureFragment;
 import com.uuzuche.lib_zxing.activity.CodeUtils;
 import com.uuzuche.lib_zxing.activity.ZXingLibrary;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Properties;
 
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppCompatActivity {
 
     private  EditText console;
     private Button setSettingButton;
@@ -39,6 +47,7 @@ public class MainActivity extends Activity {
     private EditText POEditText;
     private EditText BoxEditText;
     private TextView BoxCounter;
+    private int Boxcount;
     private String mDataDir =  "Project_18-117_出货记录";//“内部存储”目录下的路径
     private String mDataFileName =  "BoxBarcodeList";//“内部存储”目录下的路径
     private TcpFileSyncer mTcpSyncer;
@@ -52,12 +61,15 @@ public class MainActivity extends Activity {
 
     private final int SCAN_REQUEST_CODE = 0xff;
 
+    private boolean startCamera = false;
+    CaptureFragment captureFragment;
+    private final String GuideString="操作指引：\n1，  输入订单号\n2，  点击<开始录入>按键\n3，   输入包装箱序列号\n4，   录入完成后，点击<完成>按键";
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.my_scaner_layout);
 
         POEditText = (EditText) this.findViewById(R.id.idEditText);
         BoxEditText = (EditText) this.findViewById(R.id.boxeditText);
@@ -69,38 +81,45 @@ public class MainActivity extends Activity {
 
         console.setEnabled(false);
         recordSeq = 1;
+        Boxcount = 0;
 
 
         startedRecord = false;
         POEditText.setEnabled(true);
         BoxEditText.setEnabled(false);
+        scanButton.setEnabled(false);
         POEditText.requestFocus();
         setSettingButton.setText("开始录入");
-        console.append("操作指引：\n1，  输入订单号\n2，  点击<开始录入>按键\n3，   输入包装箱序列号\n4，   录入完成后，点击<完成>按键");
+        console.append(GuideString);
 
         setSettingButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if( startedRecord ){
+                    console.setText(GuideString);
                     startedRecord = false;
                     POEditText.setEnabled(true);
                     BoxEditText.setEnabled(false);
+                    scanButton.setEnabled(false);
                     POEditText.requestFocus();
                     setSettingButton.setText("开始录入");
                 }else{
                     startedRecord = true;
                     POEditText.setEnabled(false);
                     BoxEditText.setEnabled(true);
+                    scanButton.setEnabled(true);
                     BoxEditText.requestFocus();
                     setSettingButton.setText("完成");
                     recordSeq = 1;
+                    Boxcount = 0;
                     String[] boxlist = mDatabase.getPOBoxList(POEditText.getText().toString());
-                    console.setText("开始记录订单（"+POEditText.getText().toString()+"）的箱号\n");
-                    console.append("序号，  包装箱序列号，           录入日期 \n");
+                    console.setText("开始记录订单（"+POEditText.getText().toString()+"）的箱号：\n\n");
+                    console.append("序号，  包装箱序列号，    录入日期 \n");
                     for( int i=0; i< boxlist.length; i++){
-                        console.append((recordSeq++)+",  "+boxlist[i]+"\n");
+                        console.append((recordSeq++)+","+boxlist[i]+"\n");
+                        Boxcount++;
                     }
-                    BoxCounter.setText((recordSeq-1)+"");
+                    BoxCounter.setText(Boxcount+"");
                 }
             }
         });
@@ -112,7 +131,9 @@ public class MainActivity extends Activity {
                     showMessageBox("数据库打开失败，无法导出数据!!!");
                     return;
                 }
-                String fileName =  getExStorageFilePath(mDataDir,mDataFileName+".txt");
+                Date ddate = new Date(System.currentTimeMillis());
+                SimpleDateFormat smt = new SimpleDateFormat("yyyyMMdd-HHmmss");
+                String fileName =  getExStorageFilePath(mDataDir,mDataFileName+"_"+smt.format(ddate)+".txt");
                 if ( fileName.length() > 0) {
                     if( writeExternalFileBytes(fileName, mDatabase.getAllRecord())){
                         showMessageBox("导出数据在"+fileName);
@@ -156,6 +177,8 @@ public class MainActivity extends Activity {
                                     String currentRecord = mDatabase.queryPObyBoxCode(boxcode);
                                     if( mDatabase.deleteBox(boxcode) ){
                                         console.append(selection[which]+": \n"+currentRecord);
+                                        Boxcount --;
+                                        BoxCounter.setText(Boxcount+"");
                                     }else{
                                         console.append(selection[which]+": \n"+currentRecord +"失败");
                                     }
@@ -166,7 +189,6 @@ public class MainActivity extends Activity {
                                     if( mDatabase.replaceBox(POEditText.getText().toString(), boxcode,recordSeq,smt.format(ddate))){
                                         String cr = mDatabase.queryPObyBoxCode(boxcode);
                                         console.append(selection[which]+": \n"+recordSeq+",   "+cr);
-                                        BoxCounter.setText(recordSeq+"");
                                         recordSeq++;
                                     }else{
                                         console.append(selection[which]+": "+"失败");
@@ -183,14 +205,15 @@ public class MainActivity extends Activity {
                             //Sound successfully
                             String record = mDatabase.queryPObyBoxCode(boxcode);
                             console.append("添加 :\n"+recordSeq+",   "+ record+"\n");
-                            BoxCounter.setText(recordSeq+"");
+                            Boxcount++;
+                            BoxCounter.setText(Boxcount+"");
                             recordSeq ++;
                         }else{
                             //Sound error
                             console.append("添加失败\n");
                         }
                     }
-                BoxEditText.setText("");
+                    BoxEditText.setText("");
                 }
 
             }
@@ -207,7 +230,25 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View view) {
                 Intent intent = new Intent(MainActivity.this, CaptureActivity.class);
-                startActivityForResult(intent, SCAN_REQUEST_CODE);
+                //startActivityForResult(intent, SCAN_REQUEST_CODE);
+
+                FrameLayout fl = (FrameLayout) findViewById(R.id.rrc_zxing_container);
+                if( startCamera) {
+                    startCamera = false;
+                    captureFragment.onPause();
+                    captureFragment.onDestroy();
+                    captureFragment = null;
+                    fl.setVisibility(View.GONE);
+                }else{
+                    startCamera = true;
+                    fl.setVisibility(View.VISIBLE);
+                    captureFragment = new CaptureFragment();
+                    //CodeUtils.setFragmentArgs(captureFragment, R.layout.my_scaner_layout);
+                    captureFragment.setAnalyzeCallback(analyzeCallback);
+                    getSupportFragmentManager().beginTransaction().replace(R.id.rrc_zxing_container, captureFragment).commit();
+                }
+
+
             }
         });
 
@@ -224,7 +265,40 @@ public class MainActivity extends Activity {
             showMessageBox("手机存储区打开失败!!!");
             mDatabase = null;
         }
+
+
+        //检查权限
+        //checkPermissions();
+
+
     }
+
+    CodeUtils.AnalyzeCallback analyzeCallback = new CodeUtils.AnalyzeCallback() {
+        @Override
+        public void onAnalyzeSuccess(Bitmap mBitmap, String result) {
+            FrameLayout fl = (FrameLayout) findViewById(R.id.rrc_zxing_container);
+
+            startCamera = false;
+            captureFragment.onPause();
+            captureFragment.onDestroy();
+            captureFragment = null;
+            fl.setVisibility(View.GONE);
+
+            BoxEditText.setText(result);
+        }
+
+        @Override
+        public void onAnalyzeFailed() {
+            console.append("Scan: Failed");
+
+            FrameLayout fl = (FrameLayout) findViewById(R.id.rrc_zxing_container);
+            startCamera = false;
+            captureFragment.onPause();
+            captureFragment.onDestroy();
+            captureFragment = null;
+            fl.setVisibility(View.GONE);
+        }
+    };
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
@@ -336,7 +410,22 @@ public class MainActivity extends Activity {
         manager.notify(0, notification);
     }
 
-
+    private void checkPermissions()
+    {
+        String[] permissions = new String[]{
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.CAMERA
+        };
+        List<String> data = new ArrayList<>();
+        for (String permission : permissions) {
+            int checkSelfPermission = ContextCompat.checkSelfPermission(this, permission);
+            if(checkSelfPermission == PackageManager.PERMISSION_DENIED){//未申请
+                data.add(permission);
+            }
+        }
+        //ActivityCompat.requestPermissions(this, data.toArray(new String[data.size()]), 100);
+    }
 
 
 }

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SBSDataSyncServer</string>
+    <string name="app_name">库仓扫码程序</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
 </resources>
